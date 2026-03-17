@@ -1,6 +1,6 @@
 {
   "name": "midtool",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generate project-specific AI instruction files from reusable markdown standards.",
   "license": "MIT",
   "homepage": "https://github.com/hofcoral/mid#readme",
