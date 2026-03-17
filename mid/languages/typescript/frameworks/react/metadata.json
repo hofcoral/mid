@@ -1,0 +1,12 @@
+{
+  "title": "React",
+  "summary": "Standards for components, hooks, rendering, and client-side UI work in React.",
+  "alwaysApply": false,
+  "triggers": [
+    "components",
+    "hooks",
+    "rendering",
+    "state",
+    "client UI"
+  ]
+}

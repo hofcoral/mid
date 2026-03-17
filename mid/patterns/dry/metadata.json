@@ -1,0 +1,11 @@
+{
+  "title": "DRY",
+  "summary": "Guidance for reducing duplication and extracting reusable code and patterns.",
+  "alwaysApply": false,
+  "triggers": [
+    "repeated logic",
+    "refactoring",
+    "abstractions",
+    "reusable code"
+  ]
+}

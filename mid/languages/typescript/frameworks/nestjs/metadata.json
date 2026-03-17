@@ -1,0 +1,12 @@
+{
+  "title": "NestJS",
+  "summary": "Standards for backend architecture, modules, controllers, providers, and NestJS patterns.",
+  "alwaysApply": false,
+  "triggers": [
+    "modules",
+    "controllers",
+    "providers",
+    "guards",
+    "backend architecture"
+  ]
+}
