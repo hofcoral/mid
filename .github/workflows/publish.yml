@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
 
@@ -49,7 +49,7 @@ jobs:
         run: npm version patch -m "[chore] Release %s [skip ci]"
 
       - name: Publish to npm
-        run: npm publish --provenance
+        run: npm publish
 
       - name: Push release commit and tag
         run: git push origin HEAD:main --follow-tags
