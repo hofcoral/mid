@@ -1,0 +1,12 @@
+{
+  "title": "Vite.js",
+  "summary": "Standards for routing, rendering boundaries, and structure in Vite.js applications.",
+  "alwaysApply": false,
+  "triggers": [
+    "app router",
+    "pages and layouts",
+    "metadata",
+    "server actions",
+    "route handlers"
+  ]
+}

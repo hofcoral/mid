@@ -1,0 +1,6 @@
+{
+  "title": "JavaScript",
+  "summary": "Base standards for writing and maintaining JavaScript code.",
+  "alwaysApply": false,
+  "triggers": ["editing JavaScript files", "shared JS conventions"]
+}

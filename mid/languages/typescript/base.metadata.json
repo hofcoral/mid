@@ -1,0 +1,10 @@
+{
+  "title": "TypeScript",
+  "summary": "Base standards for writing and maintaining TypeScript code.",
+  "alwaysApply": false,
+  "triggers": [
+    "editing TypeScript files",
+    "typing APIs",
+    "shared TS conventions"
+  ]
+}
