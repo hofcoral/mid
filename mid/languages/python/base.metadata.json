@@ -1,6 +1,0 @@
-{
-  "title": "Python",
-  "summary": "Base standards for writing and maintaining Python code.",
-  "alwaysApply": false,
-  "triggers": ["editing Python files", "shared Python conventions"]
-}
