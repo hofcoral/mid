@@ -31,6 +31,24 @@ export function resolveOutputPath(projectRoot, rawPath) {
   return path.isAbsolute(rawPath) ? rawPath : path.join(projectRoot, rawPath);
 }
 
+export function toPortablePath(value) {
+  return value.split(path.sep).join("/");
+}
+
+export function relativeDisplayPath(fromPath, toPath) {
+  const relativePath = toPortablePath(path.relative(fromPath, toPath));
+  if (!relativePath) {
+    return "./";
+  }
+  if (relativePath.startsWith("../") || relativePath.startsWith("./") || relativePath.startsWith("/")) {
+    return relativePath;
+  }
+  if (relativePath.startsWith(".")) {
+    return `./${relativePath}`;
+  }
+  return `./${relativePath}`;
+}
+
 export async function getGitRevision(cwd) {
   try {
     const { stdout } = await execFileAsync("git", [

@@ -12,6 +12,13 @@ import {
 } from './constants.js';
 import { unique } from './utils.js';
 
+function normalizeModuleId(value) {
+  if (value.startsWith('core.optional.')) {
+    return `core.${value.slice('core.optional.'.length)}`;
+  }
+  return value;
+}
+
 export function createDefaultConfig() {
   return {
     version: CONFIG_VERSION,
@@ -61,7 +68,7 @@ function parseConfig(raw, config, warning = null) {
         config.assistants.push(value);
         break;
       case 'general':
-        config.general.push(value);
+        config.general.push(normalizeModuleId(value));
         break;
       case 'language':
         config.languages.push(value);
@@ -177,6 +184,7 @@ export function validateConfigSelection(config, modules, strict = true) {
     ['languages', 'language'],
     ['frameworks', 'framework']
   ]) {
+    config[key] = config[key].map((id) => (key === 'general' ? normalizeModuleId(id) : id));
     const filtered = config[key].filter((id) => moduleById.get(id)?.group === expectedGroup);
     if (filtered.length !== config[key].length) {
       issues.push(`config contains invalid ${key}`);

@@ -10,47 +10,12 @@ function titleize(value) {
     .join(' ');
 }
 
-function requiredIdFor(relativePath) {
-  const normalized = relativePath
-    .replace(/^mid\/core\/required\//, '')
-    .replace(/\.md$/, '')
-    .replace(/\//g, '.');
-
-  return `required.${normalized}`;
-}
-
 async function pathExists(targetPath) {
   try {
     await fs.access(targetPath);
     return true;
   } catch {
     return false;
-  }
-}
-
-async function discoverRequiredModules(standardsRoot) {
-  const requiredRoot = path.join(standardsRoot, 'mid', 'core', 'required');
-  try {
-    const entries = await fs.readdir(requiredRoot, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-      .map((entry) => {
-        const relativePath = path.posix.join('mid/core/required', entry.name);
-        return {
-          id: requiredIdFor(relativePath),
-          label: titleize(path.basename(entry.name, '.md')),
-          group: 'required',
-          path: relativePath,
-          language: '',
-          requires: []
-        };
-      })
-      .sort((left, right) => left.id.localeCompare(right.id));
-  } catch (error) {
-    if (error && error.code === 'ENOENT') {
-      return [];
-    }
-    throw error;
   }
 }
 
@@ -159,8 +124,7 @@ async function discoverLanguageModules(standardsRoot) {
 
 export async function loadCatalog(standardsRoot) {
   const modules = [
-    ...(await discoverRequiredModules(standardsRoot)),
-    ...(await discoverGeneralModules(standardsRoot, 'mid/core/optional', 'core.optional')),
+    ...(await discoverGeneralModules(standardsRoot, 'mid/core', 'core')),
     ...(await discoverGeneralModules(standardsRoot, 'mid/patterns', 'pattern')),
     ...(await discoverGeneralModules(standardsRoot, 'mid/workflows', 'workflow')),
     ...(await discoverLanguageModules(standardsRoot))
@@ -170,7 +134,7 @@ export async function loadCatalog(standardsRoot) {
 }
 
 export function validateCatalog(modules) {
-  const validGroups = new Set(['required', 'general', 'language', 'framework']);
+  const validGroups = new Set(['general', 'language', 'framework']);
   const byId = new Map(modules.map((module) => [module.id, module]));
 
   for (const module of modules) {
@@ -229,7 +193,6 @@ export function resolveModuleIds(modules, config) {
   }
 
   const requested = [
-    ...modules.filter((module) => module.group === 'required').map((module) => module.id),
     ...config.general,
     ...config.languages,
     ...config.frameworks

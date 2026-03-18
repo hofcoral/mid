@@ -2,6 +2,7 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import prompts from 'prompts';
 import { loadCatalog, resolveModuleIds, validateCatalog } from './catalog.js';
 import { createDefaultConfig, getConfigPath, loadConfig, saveConfig, validateConfigSelection } from './config.js';
 import { CONFIG_NAME, CONFIG_RELATIVE_PATH } from './constants.js';
@@ -94,6 +95,30 @@ async function doctorRun(standardsRoot, projectRoot, modules) {
   }
 }
 
+async function confirmKill(projectRoot, options) {
+  if (options.yes) {
+    return true;
+  }
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(`mid kill requires confirmation. Re-run with --yes to delete files in ${projectRoot}`);
+  }
+
+  const response = await prompts({
+    type: 'confirm',
+    name: 'confirmed',
+    message: 'Delete managed instruction files, .mid/instructions, and .mid/config for this project?',
+    initial: false
+  });
+
+  if (response.confirmed !== true) {
+    console.log('Cancelled.');
+    return false;
+  }
+
+  return true;
+}
+
 async function killRun(projectRoot, options) {
   const { config, warning } = await loadConfig(projectRoot);
   if (warning) {
@@ -101,6 +126,11 @@ async function killRun(projectRoot, options) {
   }
   if (!config) {
     throw new Error(`Missing ${CONFIG_RELATIVE_PATH} in ${projectRoot}`);
+  }
+
+  const confirmed = await confirmKill(projectRoot, options);
+  if (!confirmed) {
+    return;
   }
 
   const configPath = getConfigPath(projectRoot);
@@ -130,6 +160,7 @@ Commands:
 
 Flags:
   -b, --backup  (kill only) snapshot generated files under .mid/backups/<timestamp> before cleanup
+  -y, --yes     (kill only) skip the confirmation prompt
   -h, --help    show this help text
 `);
 }
@@ -163,7 +194,10 @@ async function main() {
   }
 
   if (command === 'kill') {
-    await killRun(projectRoot, { backup: flags.has('--backup') || flags.has('-b') });
+    await killRun(projectRoot, {
+      backup: flags.has('--backup') || flags.has('-b'),
+      yes: flags.has('--yes') || flags.has('-y')
+    });
     return;
   }
 

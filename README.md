@@ -42,8 +42,9 @@ This opens an interactive selector, saves `.mid/config`, and generates the selec
 | `mid` | Interactive selector that saves `.mid/config` and generates outputs. |
 | `mid sync` | Regenerate outputs from the saved config with no prompts. |
 | `mid doctor` | Show standards root, module count, and config status. |
-| `mid kill` | Remove managed outputs, restore adopted originals, and delete `.mid/config`. |
-| `mid kill --backup` | Move managed outputs into `.mid/backups/<timestamp>/` before cleanup. |
+| `mid kill` | Ask for confirmation, then remove managed outputs, restore adopted originals, and delete `.mid/config`. |
+| `mid kill --backup` | Ask for confirmation, then move managed outputs into `.mid/backups/<timestamp>/` before cleanup. |
+| `mid kill --yes` | Skip the confirmation prompt. Useful for non-interactive runs. |
 
 ## Generated Files
 
@@ -51,9 +52,9 @@ This opens an interactive selector, saves `.mid/config`, and generates the selec
 
 Common outputs:
 - `.mid/config`
+- `.mid/instructions/**`
 - `AGENTS.md`
 - `CLAUDE.md`
-- `MID.md`
 - `.cursor/rules/mid-*.mdc`
 
 Recommended gitignore:
@@ -80,13 +81,14 @@ It stores:
 
 `mid sync` overwrites managed outputs from that config. If an unmanaged file already exists at a target path, `mid` will not replace it silently.
 
+Generated root instruction files are entrypoints only. They point to copied module snapshots under `.mid/instructions/` using relative paths so deeper instructions can be loaded on demand instead of bloating initial context.
+
 ## Content Layout
 
 All reusable instruction content lives under `mid/`.
 
 Structure:
-- `mid/core/required`: always included modules
-- `mid/core/optional`: optional shared modules
+- `mid/core/*`: shared core modules
 - `mid/languages/*`: language and framework modules
 - `mid/patterns/*`: reusable patterns
 - `mid/workflows/*`: workflow modules

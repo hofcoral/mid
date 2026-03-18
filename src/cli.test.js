@@ -39,7 +39,7 @@ test('catalog is inferred from mid/ content', async () => {
   const modules = await loadCatalog(standardsRoot);
   const ids = modules.map((module) => module.id);
 
-  assert.ok(ids.includes('core.optional.git'));
+  assert.ok(ids.includes('core.git'));
   assert.ok(ids.includes('pattern.dry'));
   assert.ok(ids.includes('language.javascript'));
   assert.ok(ids.includes('language.python'));
@@ -51,7 +51,7 @@ test('config round-trips through .mid/config format', async () => {
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-config-'));
   const config = createDefaultConfig();
   config.assistants = ['codex', 'cursor'];
-  config.general = ['core.optional.git'];
+  config.general = ['core.git'];
   config.languages = ['language.typescript'];
   config.frameworks = ['framework.typescript.react'];
   config.standardsRevision = 'abc123';
@@ -78,7 +78,7 @@ test('config validation removes invalid entries in warn mode', async () => {
 
   assert.ok(issues.length > 0);
   assert.deepEqual(config.assistants, ['codex']);
-  assert.deepEqual(config.general, ['core.optional.git']);
+  assert.deepEqual(config.general, ['core.git']);
 });
 
 test('markdown outputs are router-style and reference module paths', async () => {
@@ -86,7 +86,7 @@ test('markdown outputs are router-style and reference module paths', async () =>
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-output-'));
   const config = createDefaultConfig();
   config.assistants = ['codex'];
-  config.general = ['core.optional.git'];
+  config.general = ['core.git'];
   config.languages = ['language.typescript'];
   config.frameworks = ['framework.typescript.nextjs'];
   config.standardsRevision = 'abc123';
@@ -98,8 +98,12 @@ test('markdown outputs are router-style and reference module paths', async () =>
   assert.match(output, /# Project Instructions/);
   assert.match(output, /## Always Apply/);
   assert.match(output, /## Available Modules/);
-  assert.match(output, /mid\/core\/optional\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\/\.mid\/instructions\/core\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\/\.mid\/instructions\/languages\/typescript\/base\.instructions\.md/);
   assert.doesNotMatch(output, /## Branches/);
+
+  await fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md'));
+  await fs.access(path.join(projectRoot, '.mid', 'instructions', 'languages', 'typescript', 'base.instructions.md'));
 });
 
 test('kill cleanup removes managed outputs', async () => {
@@ -107,7 +111,7 @@ test('kill cleanup removes managed outputs', async () => {
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-kill-'));
   const config = createDefaultConfig();
   config.assistants = ['codex', 'cursor'];
-  config.general = ['core.optional.git'];
+  config.general = ['core.git'];
   config.standardsRevision = 'abc123';
 
   const resolved = resolveModuleIds(modules, config);
@@ -116,6 +120,7 @@ test('kill cleanup removes managed outputs', async () => {
 
   await assert.rejects(fs.access(path.join(projectRoot, 'AGENTS.md')));
   await assert.rejects(fs.access(path.join(projectRoot, '.cursor', 'rules', 'mid-20-core-optional-git.mdc')));
+  await assert.rejects(fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md')));
 });
 
 test('kill backup preserves managed outputs and config under .mid/backups', async () => {
@@ -123,7 +128,7 @@ test('kill backup preserves managed outputs and config under .mid/backups', asyn
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-kill-backup-'));
   const config = createDefaultConfig();
   config.assistants = ['codex', 'cursor'];
-  config.general = ['core.optional.git'];
+  config.general = ['core.git'];
   config.standardsRevision = 'abc123';
 
   await saveConfig(projectRoot, config);
@@ -136,7 +141,8 @@ test('kill backup preserves managed outputs and config under .mid/backups', asyn
 
   await fs.access(path.join(backupRoot, 'config'));
   await fs.access(path.join(backupRoot, 'AGENTS.md'));
-  await fs.access(path.join(backupRoot, '.cursor', 'rules', 'mid-20-core-optional-git.mdc'));
+  await fs.access(path.join(backupRoot, '.cursor', 'rules', 'mid-20-core-git.mdc'));
+  await fs.access(path.join(backupRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md'));
 });
 
 test('adopted unmanaged files are stored under .mid and restored on kill', async () => {
@@ -160,11 +166,11 @@ test('adopted unmanaged files are stored under .mid and restored on kill', async
   await assert.rejects(fs.access(backupPath));
 });
 
-test('bin/mid supports help and sync through the real CLI entrypoint', async () => {
+test('bin/mid supports help, sync, and confirmed kill through the real CLI entrypoint', async () => {
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-cli-'));
   const config = createDefaultConfig();
   config.assistants = ['codex'];
-  config.general = ['core.optional.git'];
+  config.general = ['core.git'];
   config.standardsRevision = 'abc123';
 
   await saveConfig(projectRoot, config);
@@ -179,6 +185,7 @@ test('bin/mid supports help and sync through the real CLI entrypoint', async () 
   assert.match(help.stdout, /Usage: mid/);
   assert.match(help.stdout, /mid sync/);
   assert.match(help.stdout, /mid kill/);
+  assert.match(help.stdout, /--yes/);
 
   const sync = await execFileAsync(process.execPath, [cliPath, 'sync'], { cwd: standardsRoot, env });
   assert.match(sync.stdout, /Saved /);
@@ -186,4 +193,23 @@ test('bin/mid supports help and sync through the real CLI entrypoint', async () 
   const output = await fs.readFile(path.join(projectRoot, 'AGENTS.md'), 'utf8');
   assert.match(output, /# Project Instructions/);
   assert.match(output, /## Assistant Notes/);
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, 'kill'], { cwd: standardsRoot, env }),
+    (error) => {
+      assert.match(error.stderr, /requires confirmation/i);
+      return true;
+    }
+  );
+
+  await fs.access(path.join(projectRoot, 'AGENTS.md'));
+  await fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md'));
+  await fs.access(getConfigPath(projectRoot));
+
+  const kill = await execFileAsync(process.execPath, [cliPath, 'kill', '--yes'], { cwd: standardsRoot, env });
+  assert.match(kill.stdout, /Removed /);
+
+  await assert.rejects(fs.access(path.join(projectRoot, 'AGENTS.md')));
+  await assert.rejects(fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md')));
+  await assert.rejects(fs.access(getConfigPath(projectRoot)));
 });
