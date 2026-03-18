@@ -1,8 +1,9 @@
 {
   "title": "NestJS",
-  "summary": "Standards for backend architecture, modules, controllers, providers, and NestJS patterns.",
+  "summary": "Standards for NestJS folder structure, feature placement, naming, and backend module architecture.",
   "alwaysApply": false,
   "triggers": [
+    "folder structure",
     "modules",
     "controllers",
     "providers",
