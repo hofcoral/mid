@@ -80,6 +80,22 @@ function projectInstructionPath(standardsRoot, projectRoot, instructionPath) {
   return path.join(getInstructionsDir(projectRoot), instructionSubpath(standardsRoot, instructionPath));
 }
 
+function patternBundlePath(projectRoot) {
+  return path.join(getInstructionsDir(projectRoot), 'design-patterns.md');
+}
+
+function stripTopHeading(body) {
+  const lines = body.trim().split('\n');
+  if (lines[0]?.startsWith('# ')) {
+    let index = 1;
+    while (index < lines.length && lines[index].trim() === '') {
+      index += 1;
+    }
+    return lines.slice(index).join('\n').trim();
+  }
+  return body.trim();
+}
+
 async function removeIfManaged(targetPath) {
   if (await isManagedFile(targetPath)) {
     await fs.rm(targetPath, { force: true });
@@ -365,12 +381,50 @@ async function removeEmptyDirectoriesRecursive(rootPath) {
 async function syncInstructionModules(standardsRoot, projectRoot, modulesWithMetadata) {
   const instructionsDir = getInstructionsDir(projectRoot);
   const plannedPaths = new Set();
+  const copiedModules = [];
+  const patternModules = modulesWithMetadata.filter((module) => module.group === 'pattern');
+  const standardModules = modulesWithMetadata.filter((module) => module.group !== 'pattern');
 
-  for (const module of modulesWithMetadata) {
+  for (const module of standardModules) {
     const targetPath = projectInstructionPath(standardsRoot, projectRoot, module.instructionPath);
     plannedPaths.add(targetPath);
     await ensureParentDir(targetPath);
     await fs.writeFile(targetPath, `${module.body}\n`, 'utf8');
+    copiedModules.push({
+      ...module,
+      copiedInstructionPath: targetPath
+    });
+  }
+
+  let patternBundle = null;
+  if (patternModules.length > 0) {
+    const targetPath = patternBundlePath(projectRoot);
+    plannedPaths.add(targetPath);
+    await ensureParentDir(targetPath);
+
+    const sections = [
+      '# Design Patterns',
+      '',
+      'Load this file when the task is about architecture, abstractions, refactors, or structural design.',
+      ''
+    ];
+
+    for (const module of patternModules) {
+      sections.push(`## ${module.meta.title}`, '');
+      sections.push(stripTopHeading(module.body), '');
+    }
+
+    await fs.writeFile(targetPath, `${sections.join('\n').trim()}\n`, 'utf8');
+    patternBundle = {
+      meta: {
+        title: 'Design Patterns',
+        summary: 'Selected design patterns compiled into one reference file.',
+        triggers: ['architecture', 'system design', 'refactoring', 'abstractions'],
+        alwaysApply: false
+      },
+      copiedInstructionPath: targetPath,
+      labels: patternModules.map((module) => module.label)
+    };
   }
 
   const existingFiles = await listFilesRecursive(instructionsDir);
@@ -384,13 +438,7 @@ async function syncInstructionModules(standardsRoot, projectRoot, modulesWithMet
 
   await removeEmptyDirectoriesRecursive(instructionsDir);
 
-  return modulesWithMetadata.map((module) => {
-    const copiedInstructionPath = projectInstructionPath(standardsRoot, projectRoot, module.instructionPath);
-    return {
-      ...module,
-      copiedInstructionPath
-    };
-  });
+  return { copiedModules, patternBundle };
 }
 
 export async function removeManagedProjectOutputs(projectRoot, config) {
@@ -516,9 +564,12 @@ export async function cleanupMidDirectory(projectRoot) {
   await removeEmptyDirectory(midDir);
 }
 
-function buildRouterParts(outputDir, assistant, modulesWithMetadata) {
+function buildRouterParts(outputDir, assistant, modulesWithMetadata, patternBundle) {
   const alwaysApplyModules = modulesWithMetadata.filter((module) => module.meta.alwaysApply);
   const onDemandModules = modulesWithMetadata.filter((module) => !module.meta.alwaysApply);
+  if (patternBundle) {
+    onDemandModules.push(patternBundle);
+  }
   const parts = [
     '# Project Instructions',
     '',
@@ -565,11 +616,13 @@ function buildRouterParts(outputDir, assistant, modulesWithMetadata) {
   const selectedShared = modulesWithMetadata
     .filter((module) => module.group === 'general')
     .map((module) => module.label);
+  const selectedPatterns = patternBundle?.labels ?? [];
 
   parts.push('', '## Selected Stack', '');
   parts.push(`- Languages: ${selectedLanguages.length > 0 ? selectedLanguages.join(', ') : '(none)'}`);
   parts.push(`- Frameworks: ${selectedFrameworks.length > 0 ? selectedFrameworks.join(', ') : '(none)'}`);
   parts.push(`- Shared modules: ${selectedShared.length > 0 ? selectedShared.join(', ') : '(none)'}`);
+  parts.push(`- Design patterns: ${selectedPatterns.length > 0 ? selectedPatterns.join(', ') : '(none)'}`);
 
   const assistantNote = ASSISTANT_NOTES[assistant];
   if (assistantNote) {
@@ -580,7 +633,7 @@ function buildRouterParts(outputDir, assistant, modulesWithMetadata) {
   return parts;
 }
 
-async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMetadata) {
+async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMetadata, patternBundle) {
   const targetPath = assistantOutputPath(projectRoot, config, assistant);
   await ensureParentDir(targetPath);
   const outputDir = path.dirname(targetPath);
@@ -589,14 +642,14 @@ async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMe
     '',
     `<!-- Generated by mid. Edit the source standards or ${CONFIG_NAME} instead. -->`,
     '',
-    ...buildRouterParts(outputDir, assistant, modulesWithMetadata)
+    ...buildRouterParts(outputDir, assistant, modulesWithMetadata, patternBundle)
   ];
 
   await fs.writeFile(targetPath, `${parts.join('\n')}\n`, 'utf8');
   console.log(`Wrote ${targetPath}`);
 }
 
-async function writeCursorOutputs(projectRoot, config, modulesWithMetadata) {
+async function writeCursorOutputs(projectRoot, config, modulesWithMetadata, patternBundle) {
   const cursorDir = cursorOutputDir(projectRoot, config);
   if ((await fileExists(cursorDir)) && !(await isDirectory(cursorDir))) {
     throw new Error(`Cursor output path must be a directory: ${cursorDir}`);
@@ -617,7 +670,7 @@ async function writeCursorOutputs(projectRoot, config, modulesWithMetadata) {
     }
   }
 
-  const body = buildRouterParts(cursorDir, 'cursor', modulesWithMetadata).join('\n');
+  const body = buildRouterParts(cursorDir, 'cursor', modulesWithMetadata, patternBundle).join('\n');
   const contents = [
     '---',
     `description: ${yamlQuote('Generated Cursor router for mid')}`,
@@ -640,16 +693,16 @@ export async function generateOutputs(standardsRoot, projectRoot, config, resolv
   const modulesWithMetadata = await Promise.all(
     resolvedModules.map((module) => loadModuleMetadata(standardsRoot, module))
   );
-  const copiedModules = await syncInstructionModules(standardsRoot, projectRoot, modulesWithMetadata);
+  const { copiedModules, patternBundle } = await syncInstructionModules(standardsRoot, projectRoot, modulesWithMetadata);
 
   for (const assistant of ['codex', 'claude', 'general']) {
     if (!config.assistants.includes(assistant)) {
       continue;
     }
-    await writeMarkdownOutput(projectRoot, config, assistant, copiedModules);
+    await writeMarkdownOutput(projectRoot, config, assistant, copiedModules, patternBundle);
   }
 
   if (config.assistants.includes('cursor')) {
-    await writeCursorOutputs(projectRoot, config, copiedModules);
+    await writeCursorOutputs(projectRoot, config, copiedModules, patternBundle);
   }
 }

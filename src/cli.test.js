@@ -52,6 +52,7 @@ test('config round-trips through .mid/config format', async () => {
   const config = createDefaultConfig();
   config.assistants = ['codex', 'cursor'];
   config.general = ['core.git'];
+  config.patterns = ['pattern.dry', 'pattern.strategy'];
   config.languages = ['language.typescript'];
   config.frameworks = ['framework.typescript.react'];
   config.standardsRevision = 'abc123';
@@ -62,6 +63,7 @@ test('config round-trips through .mid/config format', async () => {
   assert.ok(loaded);
   assert.deepEqual(loaded.assistants, config.assistants);
   assert.deepEqual(loaded.general, config.general);
+  assert.deepEqual(loaded.patterns, config.patterns);
   assert.deepEqual(loaded.languages, config.languages);
   assert.deepEqual(loaded.frameworks, config.frameworks);
   assert.equal(loaded.standardsRevision, 'abc123');
@@ -72,21 +74,24 @@ test('config validation removes invalid entries in warn mode', async () => {
   const modules = await loadCatalog(standardsRoot);
   const config = createDefaultConfig();
   config.assistants = ['codex', 'unknown'];
-  config.general = ['core.optional.git', 'framework.typescript.nextjs'];
+  config.general = ['core.optional.git', 'pattern.strategy', 'framework.typescript.nextjs'];
+  config.patterns = ['pattern.fake'];
 
   const issues = validateConfigSelection(config, modules, false);
 
   assert.ok(issues.length > 0);
   assert.deepEqual(config.assistants, ['codex']);
   assert.deepEqual(config.general, ['core.git']);
+  assert.deepEqual(config.patterns, ['pattern.strategy']);
 });
 
-test('markdown outputs are router-style and reference module paths', async () => {
+test('markdown outputs are router-style and bundle selected patterns into one file', async () => {
   const modules = await loadCatalog(standardsRoot);
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-output-'));
   const config = createDefaultConfig();
   config.assistants = ['codex'];
   config.general = ['core.git'];
+  config.patterns = ['pattern.dry', 'pattern.strategy'];
   config.languages = ['language.typescript'];
   config.frameworks = ['framework.typescript.nextjs'];
   config.standardsRevision = 'abc123';
@@ -99,10 +104,16 @@ test('markdown outputs are router-style and reference module paths', async () =>
   assert.match(output, /## Always Apply/);
   assert.match(output, /## Available Modules/);
   assert.match(output, /Path: \.\/\.mid\/instructions\/core\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\/\.mid\/instructions\/design-patterns\.md/);
   assert.match(output, /Path: \.\/\.mid\/instructions\/languages\/typescript\/base\.instructions\.md/);
+  assert.doesNotMatch(output, /Path: \.\/\.mid\/instructions\/patterns\/dry\/instructions\.md/);
   assert.doesNotMatch(output, /## Branches/);
 
   await fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md'));
+  const patternBundle = await fs.readFile(path.join(projectRoot, '.mid', 'instructions', 'design-patterns.md'), 'utf8');
+  assert.match(patternBundle, /# Design Patterns/);
+  assert.match(patternBundle, /## DRY/);
+  assert.match(patternBundle, /## Strategy/);
   await fs.access(path.join(projectRoot, '.mid', 'instructions', 'languages', 'typescript', 'base.instructions.md'));
 });
 
@@ -151,6 +162,7 @@ test('cursor output is a single router rule that points to .mid instructions', a
   const config = createDefaultConfig();
   config.assistants = ['cursor'];
   config.general = ['core.git'];
+  config.patterns = ['pattern.decorator'];
   config.languages = ['language.typescript'];
   config.frameworks = ['framework.typescript.nestjs'];
   config.standardsRevision = 'abc123';
@@ -162,6 +174,7 @@ test('cursor output is a single router rule that points to .mid instructions', a
   assert.match(output, /alwaysApply: true/);
   assert.match(output, /# Project Instructions/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/core\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/design-patterns\.md/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/languages\/typescript\/base\.instructions\.md/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/languages\/typescript\/frameworks\/nestjs\/instructions\.md/);
   assert.doesNotMatch(output, /mid-20-/);
