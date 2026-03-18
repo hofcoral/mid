@@ -1,6 +1,18 @@
-import prompts from 'prompts';
+import { createRequire } from 'node:module';
 import { ASSISTANTS } from './constants.js';
 import { collectModules } from './catalog.js';
+
+const require = createRequire(import.meta.url);
+const { MultiselectPrompt } = require('prompts/lib/elements');
+
+const MULTISELECT_INSTRUCTIONS = [
+  '',
+  'Instructions:',
+  '    ↑/↓: Highlight option',
+  '    [space]: Toggle selection',
+  '    ←: Go back',
+  '    →/enter: Continue'
+].join('\n');
 
 function moduleChoices(modules) {
   return modules.map((module) => ({
@@ -9,79 +21,125 @@ function moduleChoices(modules) {
   }));
 }
 
+function selectedValues(items) {
+  return items.filter((item) => item.selected).map((item) => item.value);
+}
+
+async function runMultiselectStep({ message, choices, selected, min = 0, allowBack = true }) {
+  if (choices.length === 0) {
+    return { action: 'next', value: [] };
+  }
+
+  return new Promise((resolve, reject) => {
+    const prompt = new MultiselectPrompt({
+      message,
+      choices: choices.map((choice) => ({
+        ...choice,
+        selected: selected.includes(choice.value)
+      })),
+      min: min || undefined,
+      instructions: MULTISELECT_INSTRUCTIONS,
+      hint: ''
+    });
+
+    const originalSubmit = prompt.submit.bind(prompt);
+    const toValue = (items) => selectedValues(items);
+
+    prompt.left = () => {
+      if (!allowBack) {
+        prompt.bell();
+        return;
+      }
+      prompt.exited = true;
+      prompt.out.write('\n');
+      prompt.close();
+    };
+
+    prompt.right = () => {
+      originalSubmit();
+    };
+
+    prompt.on('submit', (items) => resolve({ action: 'next', value: toValue(items) }));
+    prompt.on('exit', (items) => resolve({ action: 'back', value: toValue(items) }));
+    prompt.on('abort', () => reject(new Error('Aborted.')));
+  });
+}
+
 export async function interactiveConfig(modules, config) {
-  const generalModules = collectModules(modules, 'general');
-  const patternModules = collectModules(modules, 'pattern');
-  const languages = collectModules(modules, 'language');
+  const steps = [
+    {
+      key: 'general',
+      message: 'Select shared modules',
+      getChoices: () => moduleChoices(collectModules(modules, 'general'))
+    },
+    {
+      key: 'patterns',
+      message: 'Select design patterns',
+      getChoices: () => moduleChoices(collectModules(modules, 'pattern'))
+    },
+    {
+      key: 'languages',
+      message: 'Select languages',
+      getChoices: () => moduleChoices(collectModules(modules, 'language'))
+    },
+    {
+      key: 'frameworks',
+      message: 'Select frameworks',
+      getChoices: () => moduleChoices(collectModules(modules, 'framework', config.languages)),
+      getSelected: (choices) => config.frameworks.filter((id) => choices.some((choice) => choice.value === id))
+    },
+    {
+      key: 'assistants',
+      message: 'Select assistants',
+      min: 1,
+      getChoices: () => ASSISTANTS.map((assistant) => ({
+        title: assistant.label,
+        value: assistant.id
+      }))
+    }
+  ];
 
-  const generalResponse = await prompts({
-    type: generalModules.length > 0 ? 'multiselect' : null,
-    name: 'general',
-    message: 'Select shared modules',
-    instructions: false,
-    hint: '- Space to select. Enter to confirm.',
-    choices: moduleChoices(generalModules).map((choice) => ({
-      ...choice,
-      selected: config.general.includes(choice.value)
-    }))
-  });
-  config.general = generalResponse.general ?? [];
+  function findNavigableStepIndex(startIndex, direction) {
+    let index = startIndex;
+    while (index >= 0 && index < steps.length) {
+      const step = steps[index];
+      const choices = step.getChoices();
+      if (choices.length > 0) {
+        return index;
+      }
+      config[step.key] = [];
+      index += direction;
+    }
+    return index;
+  }
 
-  const patternResponse = await prompts({
-    type: patternModules.length > 0 ? 'multiselect' : null,
-    name: 'patterns',
-    message: 'Select design patterns',
-    instructions: false,
-    hint: '- Space to select. Enter to confirm.',
-    choices: moduleChoices(patternModules).map((choice) => ({
-      ...choice,
-      selected: config.patterns.includes(choice.value)
-    }))
-  });
-  config.patterns = patternResponse.patterns ?? [];
+  let stepIndex = findNavigableStepIndex(0, 1);
+  while (stepIndex < steps.length) {
+    const step = steps[stepIndex];
+    const choices = step.getChoices();
+    const selected = step.getSelected ? step.getSelected(choices) : (config[step.key] ?? []);
+    const result = await runMultiselectStep({
+      message: step.message,
+      choices,
+      selected,
+      min: step.min,
+      allowBack: stepIndex > 0
+    });
 
-  const languageResponse = await prompts({
-    type: languages.length > 0 ? 'multiselect' : null,
-    name: 'languages',
-    message: 'Select languages',
-    instructions: false,
-    hint: '- Space to select. Enter to confirm.',
-    choices: moduleChoices(languages).map((choice) => ({
-      ...choice,
-      selected: config.languages.includes(choice.value)
-    }))
-  });
-  config.languages = languageResponse.languages ?? [];
+    config[step.key] = result.value ?? [];
 
-  const frameworks = collectModules(modules, 'framework', config.languages);
-  const validFrameworks = config.frameworks.filter((id) => frameworks.some((framework) => framework.id === id));
-  const frameworkResponse = await prompts({
-    type: frameworks.length > 0 ? 'multiselect' : null,
-    name: 'frameworks',
-    message: 'Select frameworks',
-    instructions: false,
-    hint: frameworks.length > 0 ? '- Space to select. Enter to confirm.' : '- Select a language first to enable frameworks.',
-    choices: moduleChoices(frameworks).map((choice) => ({
-      ...choice,
-      selected: validFrameworks.includes(choice.value)
-    }))
-  });
-  config.frameworks = frameworkResponse.frameworks ?? [];
+    if (step.key === 'languages') {
+      const frameworks = collectModules(modules, 'framework', config.languages);
+      config.frameworks = config.frameworks.filter((id) => frameworks.some((framework) => framework.id === id));
+    }
 
-  const assistantResponse = await prompts({
-    type: 'multiselect',
-    name: 'assistants',
-    message: 'Select assistants',
-    instructions: false,
-    hint: '- Space to select. Enter to confirm.',
-    choices: ASSISTANTS.map((assistant) => ({
-      title: assistant.label,
-      value: assistant.id,
-      selected: config.assistants.includes(assistant.id)
-    })),
-    min: 1
-  });
-  config.assistants = assistantResponse.assistants ?? [];
+    if (result.action === 'back') {
+      stepIndex = findNavigableStepIndex(stepIndex - 1, -1);
+      continue;
+    }
+
+    stepIndex = findNavigableStepIndex(stepIndex + 1, 1);
+  }
 
   if (config.assistants.length === 0) {
     throw new Error('No assistants selected.');
