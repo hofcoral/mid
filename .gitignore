@@ -1,2 +1,5 @@
 node_modules/
 dist/
+.mid/backups/
+.mid/adopted/
+.mid/state/
