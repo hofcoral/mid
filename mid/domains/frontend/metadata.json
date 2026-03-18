@@ -1,0 +1,18 @@
+{
+  "title": "Frontend",
+  "summary": "Language-agnostic frontend standards for UI composition, state boundaries, shared types, and constants.",
+  "alwaysApply": false,
+  "triggers": [
+    "UI architecture",
+    "components",
+    "hooks",
+    "state management",
+    "frontend structure"
+  ],
+  "tags": [
+    "frontend"
+  ],
+  "autoSelectWhenTags": [
+    "frontend"
+  ]
+}

@@ -8,5 +8,11 @@
     "metadata",
     "server actions",
     "route handlers"
+  ],
+  "tags": [
+    "frontend",
+    "web"
+  ],
+  "autoSelectWhenTags": [
   ]
 }

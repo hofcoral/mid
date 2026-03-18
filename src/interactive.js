@@ -107,16 +107,6 @@ async function runMultiselectStep({ message, choices, selected, min = 0, allowBa
 export async function interactiveConfig(modules, config) {
   const steps = [
     {
-      key: 'general',
-      message: 'Select shared modules',
-      getChoices: () => moduleChoices(collectModules(modules, 'general'))
-    },
-    {
-      key: 'patterns',
-      message: 'Select design patterns',
-      getChoices: () => moduleChoices(collectModules(modules, 'pattern'))
-    },
-    {
       key: 'languages',
       message: 'Select languages',
       getChoices: () => moduleChoices(collectModules(modules, 'language'))
@@ -128,8 +118,23 @@ export async function interactiveConfig(modules, config) {
       getSelected: (choices) => config.frameworks.filter((id) => choices.some((choice) => choice.value === id))
     },
     {
+      key: 'patterns',
+      message: 'Select design patterns',
+      getChoices: () => moduleChoices(collectModules(modules, 'pattern'))
+    },
+    {
+      key: 'general',
+      message: 'Select general modules',
+      getChoices: () => moduleChoices(collectModules(modules, 'general'))
+    },
+    {
+      key: 'domains',
+      message: 'Select domains',
+      getChoices: () => moduleChoices(collectModules(modules, 'domain'))
+    },
+    {
       key: 'assistants',
-      message: 'Select assistants',
+      message: 'Select AI assistants',
       min: 1,
       getChoices: () => ASSISTANTS.map((assistant) => ({
         title: assistant.label,

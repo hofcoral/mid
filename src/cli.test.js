@@ -30,9 +30,43 @@ test('catalog loads and resolves framework dependencies', async () => {
   config.frameworks = ['framework.typescript.nextjs'];
 
   const resolved = resolveModuleIds(modules, config).map((module) => module.id);
-  assert.equal(resolved.length, 2);
+  assert.equal(resolved.length, 3);
   assert.ok(resolved.includes('language.typescript'));
   assert.ok(resolved.includes('framework.typescript.nextjs'));
+  assert.ok(resolved.includes('domain.frontend'));
+});
+
+test('catalog auto-includes deduped domain modules from framework tags', async () => {
+  const modules = await loadCatalog(standardsRoot);
+  validateCatalog(modules);
+
+  const config = createDefaultConfig();
+  config.assistants = ['codex'];
+  config.general = ['core.git'];
+  config.frameworks = ['framework.typescript.nestjs'];
+  config.domains = ['domain.backend'];
+
+  const resolved = resolveModuleIds(modules, config).map((module) => module.id);
+  assert.equal(resolved.filter((id) => id === 'domain.backend').length, 1);
+  assert.ok(resolved.includes('language.typescript'));
+  assert.ok(resolved.includes('framework.typescript.nestjs'));
+  assert.ok(resolved.includes('domain.backend'));
+});
+
+test('catalog dedupes frontend domain auto-inclusion across multiple tagged frameworks', async () => {
+  const modules = await loadCatalog(standardsRoot);
+  validateCatalog(modules);
+
+  const config = createDefaultConfig();
+  config.assistants = ['codex'];
+  config.frameworks = ['framework.typescript.react', 'framework.typescript.nextjs'];
+
+  const resolved = resolveModuleIds(modules, config).map((module) => module.id);
+  assert.equal(resolved.filter((id) => id === 'domain.frontend').length, 1);
+  assert.ok(resolved.includes('language.typescript'));
+  assert.ok(resolved.includes('framework.typescript.react'));
+  assert.ok(resolved.includes('framework.typescript.nextjs'));
+  assert.ok(resolved.includes('domain.frontend'));
 });
 
 test('catalog is inferred from mid/ content', async () => {
@@ -40,6 +74,8 @@ test('catalog is inferred from mid/ content', async () => {
   const ids = modules.map((module) => module.id);
 
   assert.ok(ids.includes('core.git'));
+  assert.ok(ids.includes('domain.backend'));
+  assert.ok(ids.includes('domain.frontend'));
   assert.ok(ids.includes('pattern.dry'));
   assert.ok(ids.includes('language.javascript'));
   assert.ok(ids.includes('language.python'));
@@ -52,6 +88,7 @@ test('config round-trips through .mid/config format', async () => {
   const config = createDefaultConfig();
   config.assistants = ['codex', 'cursor'];
   config.general = ['core.git'];
+  config.domains = ['domain.backend'];
   config.patterns = ['pattern.dry', 'pattern.strategy'];
   config.languages = ['language.typescript'];
   config.frameworks = ['framework.typescript.react'];
@@ -63,6 +100,7 @@ test('config round-trips through .mid/config format', async () => {
   assert.ok(loaded);
   assert.deepEqual(loaded.assistants, config.assistants);
   assert.deepEqual(loaded.general, config.general);
+  assert.deepEqual(loaded.domains, config.domains);
   assert.deepEqual(loaded.patterns, config.patterns);
   assert.deepEqual(loaded.languages, config.languages);
   assert.deepEqual(loaded.frameworks, config.frameworks);
@@ -75,6 +113,7 @@ test('config validation removes invalid entries in warn mode', async () => {
   const config = createDefaultConfig();
   config.assistants = ['codex', 'unknown'];
   config.general = ['core.optional.git', 'pattern.strategy', 'framework.typescript.nextjs'];
+  config.domains = ['domain.fake', 'domain.backend'];
   config.patterns = ['pattern.fake'];
 
   const issues = validateConfigSelection(config, modules, false);
@@ -82,6 +121,7 @@ test('config validation removes invalid entries in warn mode', async () => {
   assert.ok(issues.length > 0);
   assert.deepEqual(config.assistants, ['codex']);
   assert.deepEqual(config.general, ['core.git']);
+  assert.deepEqual(config.domains, ['domain.backend']);
   assert.deepEqual(config.patterns, ['pattern.strategy']);
 });
 
@@ -174,6 +214,7 @@ test('cursor output is a single router rule that points to .mid instructions', a
   assert.match(output, /alwaysApply: true/);
   assert.match(output, /# Project Instructions/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/core\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/domains\/backend\/instructions\.md/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/design-patterns\.md/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/languages\/typescript\/base\.instructions\.md/);
   assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/languages\/typescript\/frameworks\/nestjs\/instructions\.md/);
@@ -228,6 +269,7 @@ test('bin/mid supports help, sync, and confirmed kill through the real CLI entry
   const output = await fs.readFile(path.join(projectRoot, 'AGENTS.md'), 'utf8');
   assert.match(output, /# Project Instructions/);
   assert.match(output, /## Assistant Notes/);
+  assert.match(output, /## Selected Stack/);
 
   await assert.rejects(
     execFileAsync(process.execPath, [cliPath, 'kill'], { cwd: standardsRoot, env }),

@@ -73,7 +73,8 @@ Commit `.mid/config` and the generated assistant files you want to keep in the p
 
 It stores:
 - selected assistants
-- selected shared modules
+- selected general modules
+- selected domains
 - selected design patterns
 - selected languages
 - selected frameworks
@@ -82,7 +83,7 @@ It stores:
 
 `mid sync` overwrites managed outputs from that config. If an unmanaged file already exists at a target path, `mid` will not replace it silently.
 
-Generated root instruction files are entrypoints only. They point to copied module snapshots under `.mid/instructions/` using relative paths so deeper instructions can be loaded on demand instead of bloating initial context. Selected design patterns are bundled into `.mid/instructions/design-patterns.md`.
+Generated root instruction files are entrypoints only. They point to copied module snapshots under `.mid/instructions/` using relative paths so deeper instructions can be loaded on demand instead of bloating initial context. Selected design patterns are bundled into `.mid/instructions/design-patterns.md`. Domain modules can also be auto-included when selected languages or frameworks expose matching metadata tags.
 
 ## Content Layout
 
@@ -90,12 +91,13 @@ All reusable instruction content lives under `mid/`.
 
 Structure:
 - `mid/core/*`: shared core modules
+- `mid/domains/*`: cross-cutting domain modules
 - `mid/languages/*`: language and framework modules
 - `mid/patterns/*`: reusable patterns
 - `mid/workflows/*`: workflow modules
 
 Module format:
-- framework/general/pattern/workflow modules use a folder with `instructions.md` and `metadata.json`
+- core/domain/framework/pattern/workflow modules use a folder with `instructions.md` and `metadata.json`
 - language base modules use `base.instructions.md` and `base.metadata.json`
 
-`mid` discovers modules directly from the filesystem.
+`mid` discovers modules directly from the filesystem. Metadata may include `tags` and `autoSelectWhenTags` so cross-cutting domain modules can be auto-selected without duplicating tag matches.

@@ -9,5 +9,12 @@
     "providers",
     "guards",
     "backend architecture"
+  ],
+  "tags": [
+    "backend",
+    "api",
+    "server"
+  ],
+  "autoSelectWhenTags": [
   ]
 }

@@ -43,7 +43,9 @@ async function discoverSimpleModules(standardsRoot, relativeRoot, prefix, group)
         group,
         path: relativePath,
         language: '',
-        requires: []
+        requires: [],
+        tags: attributes.tags ?? [],
+        autoSelectWhenTags: attributes.autoSelectWhenTags ?? []
       });
     }
 
@@ -80,7 +82,9 @@ async function discoverLanguageModules(standardsRoot) {
           group: 'language',
           path: basePath,
           language: '',
-          requires: []
+          requires: [],
+          tags: attributes.tags ?? [],
+          autoSelectWhenTags: attributes.autoSelectWhenTags ?? []
         });
       }
 
@@ -108,7 +112,9 @@ async function discoverLanguageModules(standardsRoot) {
           group: 'framework',
           path: frameworkPath,
           language: `language.${languageName}`,
-          requires: [`language.${languageName}`]
+          requires: [`language.${languageName}`],
+          tags: attributes.tags ?? [],
+          autoSelectWhenTags: attributes.autoSelectWhenTags ?? []
         });
       }
     }
@@ -125,6 +131,7 @@ async function discoverLanguageModules(standardsRoot) {
 export async function loadCatalog(standardsRoot) {
   const modules = [
     ...(await discoverSimpleModules(standardsRoot, 'mid/core', 'core', 'general')),
+    ...(await discoverSimpleModules(standardsRoot, 'mid/domains', 'domain', 'domain')),
     ...(await discoverSimpleModules(standardsRoot, 'mid/patterns', 'pattern', 'pattern')),
     ...(await discoverSimpleModules(standardsRoot, 'mid/workflows', 'workflow', 'general')),
     ...(await discoverLanguageModules(standardsRoot))
@@ -134,7 +141,7 @@ export async function loadCatalog(standardsRoot) {
 }
 
 export function validateCatalog(modules) {
-  const validGroups = new Set(['general', 'pattern', 'language', 'framework']);
+  const validGroups = new Set(['general', 'domain', 'pattern', 'language', 'framework']);
   const byId = new Map(modules.map((module) => [module.id, module]));
 
   for (const module of modules) {
@@ -175,6 +182,7 @@ export function collectModules(modules, group, selectedLanguages = []) {
 export function resolveModuleIds(modules, config) {
   const byId = new Map(modules.map((module) => [module.id, module]));
   const visited = new Set();
+  const collectedTags = new Set();
 
   function visit(id) {
     if (!id || visited.has(id)) {
@@ -187,6 +195,9 @@ export function resolveModuleIds(modules, config) {
     }
 
     visited.add(id);
+    for (const tag of module.tags ?? []) {
+      collectedTags.add(tag);
+    }
     for (const dependency of module.requires) {
       visit(dependency);
     }
@@ -194,6 +205,7 @@ export function resolveModuleIds(modules, config) {
 
   const requested = [
     ...config.general,
+    ...config.domains,
     ...config.patterns,
     ...config.languages,
     ...config.frameworks
@@ -201,6 +213,20 @@ export function resolveModuleIds(modules, config) {
 
   for (const id of requested) {
     visit(id);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const module of modules) {
+      if (visited.has(module.id)) {
+        continue;
+      }
+      if ((module.autoSelectWhenTags ?? []).some((tag) => collectedTags.has(tag))) {
+        visit(module.id);
+        changed = true;
+      }
+    }
   }
 
   return modules.filter((module) => visited.has(module.id));

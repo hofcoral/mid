@@ -24,6 +24,7 @@ function normalizeConfigSelections(config) {
   const migratedPatterns = normalizedGeneral.filter((value) => value.startsWith('pattern.'));
   config.general = unique(normalizedGeneral.filter((value) => !value.startsWith('pattern.')));
   config.patterns = unique([...(config.patterns ?? []), ...migratedPatterns]);
+  config.domains = unique(config.domains ?? []);
 }
 
 export function createDefaultConfig() {
@@ -32,6 +33,7 @@ export function createDefaultConfig() {
     standardsRevision: 'unknown',
     assistants: [],
     general: [],
+    domains: [],
     patterns: [],
     languages: [],
     frameworks: [],
@@ -78,6 +80,9 @@ function parseConfig(raw, config, warning = null) {
       case 'general':
         config.general.push(normalizeModuleId(value));
         break;
+      case 'domain':
+        config.domains.push(value);
+        break;
       case 'pattern':
         config.patterns.push(value);
         break;
@@ -106,6 +111,7 @@ function parseConfig(raw, config, warning = null) {
 
   config.assistants = unique(config.assistants);
   normalizeConfigSelections(config);
+  config.domains = unique(config.domains);
   config.languages = unique(config.languages);
   config.frameworks = unique(config.frameworks);
 
@@ -156,6 +162,9 @@ export async function saveConfig(projectRoot, config) {
   for (const value of config.general) {
     lines.push(`general=${value}`);
   }
+  for (const value of config.domains) {
+    lines.push(`domain=${value}`);
+  }
   for (const value of config.patterns) {
     lines.push(`pattern=${value}`);
   }
@@ -197,6 +206,7 @@ export function validateConfigSelection(config, modules, strict = true) {
 
   for (const [key, expectedGroup] of [
     ['general', 'general'],
+    ['domains', 'domain'],
     ['patterns', 'pattern'],
     ['languages', 'language'],
     ['frameworks', 'framework']

@@ -616,12 +616,16 @@ function buildRouterParts(outputDir, assistant, modulesWithMetadata, patternBund
   const selectedShared = modulesWithMetadata
     .filter((module) => module.group === 'general')
     .map((module) => module.label);
+  const selectedDomains = modulesWithMetadata
+    .filter((module) => module.group === 'domain')
+    .map((module) => module.label);
   const selectedPatterns = patternBundle?.labels ?? [];
 
   parts.push('', '## Selected Stack', '');
   parts.push(`- Languages: ${selectedLanguages.length > 0 ? selectedLanguages.join(', ') : '(none)'}`);
   parts.push(`- Frameworks: ${selectedFrameworks.length > 0 ? selectedFrameworks.join(', ') : '(none)'}`);
-  parts.push(`- Shared modules: ${selectedShared.length > 0 ? selectedShared.join(', ') : '(none)'}`);
+  parts.push(`- General: ${selectedShared.length > 0 ? selectedShared.join(', ') : '(none)'}`);
+  parts.push(`- Domains: ${selectedDomains.length > 0 ? selectedDomains.join(', ') : '(none)'}`);
   parts.push(`- Design patterns: ${selectedPatterns.length > 0 ? selectedPatterns.join(', ') : '(none)'}`);
 
   const assistantNote = ASSISTANT_NOTES[assistant];

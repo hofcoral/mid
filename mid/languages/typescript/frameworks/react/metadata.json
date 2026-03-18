@@ -8,5 +8,12 @@
     "rendering",
     "state",
     "client UI"
+  ],
+  "tags": [
+    "frontend",
+    "ui",
+    "web"
+  ],
+  "autoSelectWhenTags": [
   ]
 }

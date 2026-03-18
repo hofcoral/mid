@@ -24,6 +24,10 @@ function ensureStringArray(value, key, metadataPath) {
   }
 }
 
+function normalizeStringArray(value) {
+  return [...new Set((value ?? []).map((entry) => entry.trim()).filter(Boolean))];
+}
+
 export function parseMetadata(raw, metadataPath = 'metadata.json') {
   try {
     return JSON.parse(raw);
@@ -41,12 +45,16 @@ export function validateMetadataAttributes(attributes, metadataPath) {
   ensureString(attributes.summary ?? '', 'summary', metadataPath);
   ensureBoolean(attributes.alwaysApply ?? false, 'alwaysApply', metadataPath);
   ensureStringArray(attributes.triggers ?? [], 'triggers', metadataPath);
+  ensureStringArray(attributes.tags ?? [], 'tags', metadataPath);
+  ensureStringArray(attributes.autoSelectWhenTags ?? [], 'autoSelectWhenTags', metadataPath);
 
   return {
     title: attributes.title,
     summary: attributes.summary ?? '',
     alwaysApply: !!attributes.alwaysApply,
-    triggers: attributes.triggers ?? []
+    triggers: normalizeStringArray(attributes.triggers),
+    tags: normalizeStringArray(attributes.tags),
+    autoSelectWhenTags: normalizeStringArray(attributes.autoSelectWhenTags)
   };
 }
 
@@ -67,7 +75,7 @@ export function resolveModuleFiles(standardsRoot, modulePath) {
 export async function readModuleAttributes(metadataPath) {
   try {
     const metadataRaw = await fs.readFile(metadataPath, 'utf8');
-    return parseMetadata(metadataRaw, metadataPath);
+    return validateMetadataAttributes(parseMetadata(metadataRaw, metadataPath), metadataPath);
   } catch (error) {
     if (!error || error.code !== 'ENOENT') {
       throw error;
@@ -88,7 +96,9 @@ export async function loadModuleMetadata(standardsRoot, module) {
       title: normalized.title || module.label,
       summary: normalized.summary,
       triggers: normalized.triggers,
-      alwaysApply: normalized.alwaysApply
+      alwaysApply: normalized.alwaysApply,
+      tags: normalized.tags,
+      autoSelectWhenTags: normalized.autoSelectWhenTags
     },
     instructionPath: sourcePath,
     metadataPath,

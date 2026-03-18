@@ -1,0 +1,18 @@
+{
+  "title": "Backend",
+  "summary": "Language-agnostic backend standards for controllers, services, validation, integrations, and API boundaries.",
+  "alwaysApply": false,
+  "triggers": [
+    "backend architecture",
+    "APIs",
+    "services",
+    "jobs",
+    "integrations"
+  ],
+  "tags": [
+    "backend"
+  ],
+  "autoSelectWhenTags": [
+    "backend"
+  ]
+}
