@@ -20,7 +20,6 @@ export const ASSISTANTS = [
 ];
 
 export const GROUP_WEIGHTS = {
-  required: '10',
   general: '20',
   language: '30',
   framework: '40'

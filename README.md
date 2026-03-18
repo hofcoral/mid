@@ -87,8 +87,7 @@ Generated root instruction files are entrypoints only. They point to copied modu
 All reusable instruction content lives under `mid/`.
 
 Structure:
-- `mid/core/required`: always included modules
-- `mid/core/optional`: optional shared modules
+- `mid/core/*`: shared core modules
 - `mid/languages/*`: language and framework modules
 - `mid/patterns/*`: reusable patterns
 - `mid/workflows/*`: workflow modules

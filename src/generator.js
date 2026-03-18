@@ -576,7 +576,7 @@ async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMe
   const selectedFrameworks = modulesWithMetadata.filter((module) => module.group === 'framework').map((module) => module.label);
   const selectedLanguages = modulesWithMetadata.filter((module) => module.group === 'language').map((module) => module.label);
   const selectedShared = modulesWithMetadata
-    .filter((module) => ['required', 'general'].includes(module.group))
+    .filter((module) => module.group === 'general')
     .map((module) => module.label);
 
   parts.push('', '## Selected Stack', '');
