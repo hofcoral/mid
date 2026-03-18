@@ -57,7 +57,7 @@ Common outputs:
 - `CLAUDE.md`
 - `.cursor/rules/mid-router.mdc`
 
-Recommended gitignore:
+Recommended gitignore (Auto-added by mid):
 
 ```gitignore
 .mid/backups/
