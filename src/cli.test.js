@@ -166,7 +166,7 @@ test('adopted unmanaged files are stored under .mid and restored on kill', async
   await assert.rejects(fs.access(backupPath));
 });
 
-test('bin/mid supports help and sync through the real CLI entrypoint', async () => {
+test('bin/mid supports help, sync, and confirmed kill through the real CLI entrypoint', async () => {
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-cli-'));
   const config = createDefaultConfig();
   config.assistants = ['codex'];
@@ -185,6 +185,7 @@ test('bin/mid supports help and sync through the real CLI entrypoint', async () 
   assert.match(help.stdout, /Usage: mid/);
   assert.match(help.stdout, /mid sync/);
   assert.match(help.stdout, /mid kill/);
+  assert.match(help.stdout, /--yes/);
 
   const sync = await execFileAsync(process.execPath, [cliPath, 'sync'], { cwd: standardsRoot, env });
   assert.match(sync.stdout, /Saved /);
@@ -192,4 +193,23 @@ test('bin/mid supports help and sync through the real CLI entrypoint', async () 
   const output = await fs.readFile(path.join(projectRoot, 'AGENTS.md'), 'utf8');
   assert.match(output, /# Project Instructions/);
   assert.match(output, /## Assistant Notes/);
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, 'kill'], { cwd: standardsRoot, env }),
+    (error) => {
+      assert.match(error.stderr, /requires confirmation/i);
+      return true;
+    }
+  );
+
+  await fs.access(path.join(projectRoot, 'AGENTS.md'));
+  await fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md'));
+  await fs.access(getConfigPath(projectRoot));
+
+  const kill = await execFileAsync(process.execPath, [cliPath, 'kill', '--yes'], { cwd: standardsRoot, env });
+  assert.match(kill.stdout, /Removed /);
+
+  await assert.rejects(fs.access(path.join(projectRoot, 'AGENTS.md')));
+  await assert.rejects(fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md')));
+  await assert.rejects(fs.access(getConfigPath(projectRoot)));
 });

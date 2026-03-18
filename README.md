@@ -42,8 +42,9 @@ This opens an interactive selector, saves `.mid/config`, and generates the selec
 | `mid` | Interactive selector that saves `.mid/config` and generates outputs. |
 | `mid sync` | Regenerate outputs from the saved config with no prompts. |
 | `mid doctor` | Show standards root, module count, and config status. |
-| `mid kill` | Remove managed outputs, restore adopted originals, and delete `.mid/config`. |
-| `mid kill --backup` | Move managed outputs into `.mid/backups/<timestamp>/` before cleanup. |
+| `mid kill` | Ask for confirmation, then remove managed outputs, restore adopted originals, and delete `.mid/config`. |
+| `mid kill --backup` | Ask for confirmation, then move managed outputs into `.mid/backups/<timestamp>/` before cleanup. |
+| `mid kill --yes` | Skip the confirmation prompt. Useful for non-interactive runs. |
 
 ## Generated Files
 
