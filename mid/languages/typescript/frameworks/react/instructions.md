@@ -5,3 +5,4 @@
 - Split component logic from layout by using small, reusable pieces and lifting state up.
 - Memoize expensive values with `useMemo` sparingly; prioritize readability.
 - Keep styling close to the component via shared tokens or utility classes to avoid drift.
+- Use `const MyComponent = () => ...` over `function MyComponent {...}` unless needed for hoisting.
