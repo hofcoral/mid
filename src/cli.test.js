@@ -98,8 +98,12 @@ test('markdown outputs are router-style and reference module paths', async () =>
   assert.match(output, /# Project Instructions/);
   assert.match(output, /## Always Apply/);
   assert.match(output, /## Available Modules/);
-  assert.match(output, /mid\/core\/optional\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\/\.mid\/instructions\/core\/optional\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\/\.mid\/instructions\/languages\/typescript\/base\.instructions\.md/);
   assert.doesNotMatch(output, /## Branches/);
+
+  await fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'optional', 'git', 'instructions.md'));
+  await fs.access(path.join(projectRoot, '.mid', 'instructions', 'languages', 'typescript', 'base.instructions.md'));
 });
 
 test('kill cleanup removes managed outputs', async () => {
@@ -116,6 +120,7 @@ test('kill cleanup removes managed outputs', async () => {
 
   await assert.rejects(fs.access(path.join(projectRoot, 'AGENTS.md')));
   await assert.rejects(fs.access(path.join(projectRoot, '.cursor', 'rules', 'mid-20-core-optional-git.mdc')));
+  await assert.rejects(fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'optional', 'git', 'instructions.md')));
 });
 
 test('kill backup preserves managed outputs and config under .mid/backups', async () => {
@@ -137,6 +142,7 @@ test('kill backup preserves managed outputs and config under .mid/backups', asyn
   await fs.access(path.join(backupRoot, 'config'));
   await fs.access(path.join(backupRoot, 'AGENTS.md'));
   await fs.access(path.join(backupRoot, '.cursor', 'rules', 'mid-20-core-optional-git.mdc'));
+  await fs.access(path.join(backupRoot, '.mid', 'instructions', 'core', 'optional', 'git', 'instructions.md'));
 });
 
 test('adopted unmanaged files are stored under .mid and restored on kill', async () => {

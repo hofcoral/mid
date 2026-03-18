@@ -11,12 +11,13 @@ import {
   CURSOR_PREFIX,
   DEFAULT_OUTPUTS,
   GROUP_WEIGHTS,
+  INSTRUCTIONS_DIR_NAME,
   MANAGED_TOKEN,
   MID_DIR_NAME,
   STATE_DIR_NAME
 } from './constants.js';
 import { loadModuleMetadata } from './module-metadata.js';
-import { assistantLabel, resolveOutputPath, slugify, yamlQuote } from './utils.js';
+import { assistantLabel, relativeDisplayPath, resolveOutputPath, slugify, yamlQuote } from './utils.js';
 
 const ASSISTANT_NOTES = {
   codex: 'Treat this file as the entry point and only load referenced modules when the task clearly matches their triggers.',
@@ -56,6 +57,26 @@ async function isManagedFile(targetPath) {
   } catch {
     return false;
   }
+}
+
+function getInstructionsDir(projectRoot) {
+  return path.join(projectRoot, MID_DIR_NAME, INSTRUCTIONS_DIR_NAME);
+}
+
+function getContentRoot(standardsRoot) {
+  return path.join(standardsRoot, 'mid');
+}
+
+function instructionSubpath(standardsRoot, instructionPath) {
+  const relativePath = path.relative(getContentRoot(standardsRoot), instructionPath);
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error(`Could not resolve instruction path within standards content root: ${instructionPath}`);
+  }
+  return relativePath;
+}
+
+function projectInstructionPath(standardsRoot, projectRoot, instructionPath) {
+  return path.join(getInstructionsDir(projectRoot), instructionSubpath(standardsRoot, instructionPath));
 }
 
 async function removeIfManaged(targetPath) {
@@ -309,6 +330,74 @@ async function removeEmptyDirectory(targetPath) {
   }
 }
 
+async function listFilesRecursive(rootPath) {
+  const files = [];
+
+  async function visit(currentPath) {
+    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(currentPath, entry.name);
+      if (entry.isDirectory()) {
+        await visit(entryPath);
+        continue;
+      }
+      files.push(entryPath);
+    }
+  }
+
+  if (await isDirectory(rootPath)) {
+    await visit(rootPath);
+  }
+
+  return files;
+}
+
+async function removeEmptyDirectoriesRecursive(rootPath) {
+  if (!(await isDirectory(rootPath))) {
+    return;
+  }
+
+  const entries = await fs.readdir(rootPath, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    await removeEmptyDirectoriesRecursive(path.join(rootPath, entry.name));
+  }
+  await removeEmptyDirectory(rootPath);
+}
+
+async function syncInstructionModules(standardsRoot, projectRoot, modulesWithMetadata) {
+  const instructionsDir = getInstructionsDir(projectRoot);
+  const plannedPaths = new Set();
+
+  for (const module of modulesWithMetadata) {
+    const targetPath = projectInstructionPath(standardsRoot, projectRoot, module.instructionPath);
+    plannedPaths.add(targetPath);
+    await ensureParentDir(targetPath);
+    await fs.writeFile(targetPath, `${module.body}\n`, 'utf8');
+  }
+
+  const existingFiles = await listFilesRecursive(instructionsDir);
+  for (const targetPath of existingFiles.sort()) {
+    if (plannedPaths.has(targetPath)) {
+      continue;
+    }
+    await fs.rm(targetPath, { force: true });
+    console.log(`Removed stale instruction module: ${targetPath}`);
+  }
+
+  await removeEmptyDirectoriesRecursive(instructionsDir);
+
+  return modulesWithMetadata.map((module) => {
+    const copiedInstructionPath = projectInstructionPath(standardsRoot, projectRoot, module.instructionPath);
+    return {
+      ...module,
+      copiedInstructionPath
+    };
+  });
+}
+
 export async function removeManagedProjectOutputs(projectRoot, config) {
   return removeManagedProjectOutputsWithOptions(projectRoot, config, {});
 }
@@ -371,6 +460,17 @@ export async function removeManagedProjectOutputsWithOptions(projectRoot, config
       await removeEmptyDirectory(cursorParent);
     }
   }
+
+  const instructionsDir = getInstructionsDir(projectRoot);
+  if (await isDirectory(instructionsDir)) {
+    if (backupRoot) {
+      const backupPath = await moveToBackup(projectRoot, instructionsDir, backupRoot);
+      console.log(`Backed up instruction modules: ${instructionsDir} -> ${backupPath}`);
+    } else {
+      await fs.rm(instructionsDir, { recursive: true, force: true });
+      console.log(`Removed instruction modules: ${instructionsDir}`);
+    }
+  }
 }
 
 export async function restoreAdoptedProjectFiles(projectRoot) {
@@ -405,7 +505,9 @@ export async function cleanupMidDirectory(projectRoot) {
   const backupsDir = path.join(midDir, BACKUPS_DIR_NAME);
   const stateDir = path.join(midDir, STATE_DIR_NAME);
   const adoptedDir = path.join(midDir, ADOPTED_BACKUPS_DIR_NAME);
+  const instructionsDir = path.join(midDir, INSTRUCTIONS_DIR_NAME);
   await removeEmptyDirectory(stateDir);
+  await removeEmptyDirectory(instructionsDir);
   if (await isDirectory(adoptedDir)) {
     const entries = await fs.readdir(adoptedDir);
     for (const entry of entries.sort()) {
@@ -419,14 +521,12 @@ export async function cleanupMidDirectory(projectRoot) {
   await removeEmptyDirectory(midDir);
 }
 
-async function writeMarkdownOutput(standardsRoot, projectRoot, config, assistant, resolvedModules) {
+async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMetadata) {
   const targetPath = assistantOutputPath(projectRoot, config, assistant);
   await ensureParentDir(targetPath);
-  const modulesWithMetadata = await Promise.all(
-    resolvedModules.map((module) => loadModuleMetadata(standardsRoot, module))
-  );
   const alwaysApplyModules = modulesWithMetadata.filter((module) => module.meta.alwaysApply);
   const onDemandModules = modulesWithMetadata.filter((module) => !module.meta.alwaysApply);
+  const outputDir = path.dirname(targetPath);
 
   const parts = [
     `<!-- ${MANAGED_TOKEN} assistant=${assistant} version=${CONFIG_VERSION} revision=${config.standardsRevision} -->`,
@@ -441,14 +541,15 @@ async function writeMarkdownOutput(standardsRoot, projectRoot, config, assistant
     '',
     '- Load additional instruction modules only when the task clearly matches their triggers.',
     '- Prefer the smallest relevant set of modules for the task.',
-    '- Treat the paths below as the source of truth for deeper instructions.'
+    '- Treat the relative paths below as the source of truth for deeper instructions under `.mid/instructions/`.',
+    '- When a task does not match a module trigger, do not load that module.'
   ];
 
   if (alwaysApplyModules.length > 0) {
     parts.push('', '## Always Apply', '');
     for (const module of alwaysApplyModules) {
-  parts.push(`- ${module.meta.title}`);
-  parts.push(`  Path: ${module.instructionPath}`);
+      parts.push(`- ${module.meta.title}`);
+      parts.push(`  Path: ${relativeDisplayPath(outputDir, module.copiedInstructionPath)}`);
       if (module.meta.summary) {
         parts.push(`  Summary: ${module.meta.summary}`);
       }
@@ -462,7 +563,7 @@ async function writeMarkdownOutput(standardsRoot, projectRoot, config, assistant
     parts.push('', '## Available Modules', '');
     for (const module of onDemandModules) {
       parts.push(`- ${module.meta.title}`);
-      parts.push(`  Path: ${module.instructionPath}`);
+      parts.push(`  Path: ${relativeDisplayPath(outputDir, module.copiedInstructionPath)}`);
       if (module.meta.summary) {
         parts.push(`  Summary: ${module.meta.summary}`);
       }
@@ -472,9 +573,9 @@ async function writeMarkdownOutput(standardsRoot, projectRoot, config, assistant
     }
   }
 
-  const selectedFrameworks = resolvedModules.filter((module) => module.group === 'framework').map((module) => module.label);
-  const selectedLanguages = resolvedModules.filter((module) => module.group === 'language').map((module) => module.label);
-  const selectedShared = resolvedModules
+  const selectedFrameworks = modulesWithMetadata.filter((module) => module.group === 'framework').map((module) => module.label);
+  const selectedLanguages = modulesWithMetadata.filter((module) => module.group === 'language').map((module) => module.label);
+  const selectedShared = modulesWithMetadata
     .filter((module) => ['required', 'general'].includes(module.group))
     .map((module) => module.label);
 
@@ -493,14 +594,14 @@ async function writeMarkdownOutput(standardsRoot, projectRoot, config, assistant
   console.log(`Wrote ${targetPath}`);
 }
 
-async function writeCursorOutputs(standardsRoot, projectRoot, config, resolvedModules) {
+async function writeCursorOutputs(projectRoot, config, modulesWithMetadata) {
   const cursorDir = assistantOutputPath(projectRoot, config, 'cursor');
   if ((await fileExists(cursorDir)) && !(await isDirectory(cursorDir))) {
     throw new Error(`Cursor output path must be a directory: ${cursorDir}`);
   }
 
   await fs.mkdir(cursorDir, { recursive: true });
-  const plannedPaths = new Set(resolvedModules.map((module) => path.join(cursorDir, cursorFilenameFor(module))));
+  const plannedPaths = new Set(modulesWithMetadata.map((module) => path.join(cursorDir, cursorFilenameFor(module))));
 
   const existingEntries = await fs.readdir(cursorDir).catch(() => []);
   for (const entry of existingEntries.filter((name) => name.startsWith(CURSOR_PREFIX) && name.endsWith('.mdc')).sort()) {
@@ -513,19 +614,18 @@ async function writeCursorOutputs(standardsRoot, projectRoot, config, resolvedMo
     }
   }
 
-  for (const module of resolvedModules) {
-    const moduleWithMetadata = await loadModuleMetadata(standardsRoot, module);
+  for (const module of modulesWithMetadata) {
     const targetPath = path.join(cursorDir, cursorFilenameFor(module));
     const contents = [
       '---',
-      `description: ${yamlQuote(`Generated from ${moduleWithMetadata.meta.title}`)}`,
+      `description: ${yamlQuote(`Generated from ${module.meta.title}`)}`,
       'alwaysApply: true',
       '---',
       '',
       `<!-- ${MANAGED_TOKEN} assistant=cursor version=${CONFIG_VERSION} revision=${config.standardsRevision} -->`,
       `<!-- mid:module id=${module.id} path=${module.path} -->`,
       '',
-      moduleWithMetadata.body,
+      module.body,
       ''
     ].join('\n');
 
@@ -536,15 +636,19 @@ async function writeCursorOutputs(standardsRoot, projectRoot, config, resolvedMo
 
 export async function generateOutputs(standardsRoot, projectRoot, config, resolvedModules) {
   await cleanupDeselectOutputs(projectRoot, config);
+  const modulesWithMetadata = await Promise.all(
+    resolvedModules.map((module) => loadModuleMetadata(standardsRoot, module))
+  );
+  const copiedModules = await syncInstructionModules(standardsRoot, projectRoot, modulesWithMetadata);
 
   for (const assistant of ['codex', 'claude', 'general']) {
     if (!config.assistants.includes(assistant)) {
       continue;
     }
-    await writeMarkdownOutput(standardsRoot, projectRoot, config, assistant, resolvedModules);
+    await writeMarkdownOutput(projectRoot, config, assistant, copiedModules);
   }
 
   if (config.assistants.includes('cursor')) {
-    await writeCursorOutputs(standardsRoot, projectRoot, config, resolvedModules);
+    await writeCursorOutputs(projectRoot, config, copiedModules);
   }
 }

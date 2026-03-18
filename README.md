@@ -51,9 +51,9 @@ This opens an interactive selector, saves `.mid/config`, and generates the selec
 
 Common outputs:
 - `.mid/config`
+- `.mid/instructions/**`
 - `AGENTS.md`
 - `CLAUDE.md`
-- `MID.md`
 - `.cursor/rules/mid-*.mdc`
 
 Recommended gitignore:
@@ -79,6 +79,8 @@ It stores:
 - the standards revision used for generation
 
 `mid sync` overwrites managed outputs from that config. If an unmanaged file already exists at a target path, `mid` will not replace it silently.
+
+Generated root instruction files are entrypoints only. They point to copied module snapshots under `.mid/instructions/` using relative paths so deeper instructions can be loaded on demand instead of bloating initial context.
 
 ## Content Layout
 
