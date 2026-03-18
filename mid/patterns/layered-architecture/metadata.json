@@ -1,0 +1,11 @@
+{
+  "title": "Layered Architecture",
+  "summary": "Organize systems into clear input, application, domain, and infrastructure layers with explicit boundaries.",
+  "alwaysApply": false,
+  "triggers": [
+    "application layers",
+    "controllers and services",
+    "domain boundaries",
+    "infrastructure separation"
+  ]
+}

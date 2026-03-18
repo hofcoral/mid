@@ -1,0 +1,11 @@
+{
+  "title": "Command Dispatch",
+  "summary": "Map explicit command types to handlers so actions are routed through a consistent dispatch point.",
+  "alwaysApply": false,
+  "triggers": [
+    "commands",
+    "handlers",
+    "dispatchers",
+    "action routing"
+  ]
+}
