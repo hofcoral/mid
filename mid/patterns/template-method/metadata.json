@@ -1,0 +1,11 @@
+{
+  "title": "Template Method",
+  "summary": "Define a stable workflow once and allow specialized implementations to fill in the varying steps.",
+  "alwaysApply": false,
+  "triggers": [
+    "shared workflow",
+    "base abstraction",
+    "hook methods",
+    "specialized implementations"
+  ]
+}

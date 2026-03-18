@@ -1,0 +1,11 @@
+{
+  "title": "Dependency Injection / IoC",
+  "summary": "Supply dependencies from the outside so components stay decoupled, testable, and easy to swap.",
+  "alwaysApply": false,
+  "triggers": [
+    "dependency injection",
+    "service wiring",
+    "testability",
+    "swappable implementations"
+  ]
+}

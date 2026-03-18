@@ -1,0 +1,11 @@
+{
+  "title": "Adapter / Gateway",
+  "summary": "Wrap external systems behind a stable application-facing boundary and translate between models.",
+  "alwaysApply": false,
+  "triggers": [
+    "external APIs",
+    "service clients",
+    "provider wrappers",
+    "model translation"
+  ]
+}

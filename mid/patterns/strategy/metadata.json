@@ -1,0 +1,11 @@
+{
+  "title": "Strategy",
+  "summary": "Wrap different behaviors behind a shared contract so the correct one can be selected at runtime.",
+  "alwaysApply": false,
+  "triggers": [
+    "runtime behavior selection",
+    "pluggable logic",
+    "variant implementations",
+    "shared contract"
+  ]
+}

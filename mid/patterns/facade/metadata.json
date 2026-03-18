@@ -1,0 +1,11 @@
+{
+  "title": "Facade",
+  "summary": "Hide subsystem complexity behind a smaller, task-focused interface for callers.",
+  "alwaysApply": false,
+  "triggers": [
+    "simplified interface",
+    "subsystem orchestration",
+    "reduce coupling",
+    "hide complexity"
+  ]
+}
