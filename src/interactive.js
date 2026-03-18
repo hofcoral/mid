@@ -11,12 +11,13 @@ function moduleChoices(modules) {
 
 export async function interactiveConfig(modules, config) {
   const generalModules = collectModules(modules, 'general');
+  const patternModules = collectModules(modules, 'pattern');
   const languages = collectModules(modules, 'language');
 
   const generalResponse = await prompts({
     type: generalModules.length > 0 ? 'multiselect' : null,
     name: 'general',
-    message: 'Select general modules',
+    message: 'Select shared modules',
     instructions: false,
     hint: '- Space to select. Enter to confirm.',
     choices: moduleChoices(generalModules).map((choice) => ({
@@ -25,6 +26,19 @@ export async function interactiveConfig(modules, config) {
     }))
   });
   config.general = generalResponse.general ?? [];
+
+  const patternResponse = await prompts({
+    type: patternModules.length > 0 ? 'multiselect' : null,
+    name: 'patterns',
+    message: 'Select design patterns',
+    instructions: false,
+    hint: '- Space to select. Enter to confirm.',
+    choices: moduleChoices(patternModules).map((choice) => ({
+      ...choice,
+      selected: config.patterns.includes(choice.value)
+    }))
+  });
+  config.patterns = patternResponse.patterns ?? [];
 
   const languageResponse = await prompts({
     type: languages.length > 0 ? 'multiselect' : null,

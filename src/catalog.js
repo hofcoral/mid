@@ -19,7 +19,7 @@ async function pathExists(targetPath) {
   }
 }
 
-async function discoverGeneralModules(standardsRoot, relativeRoot, prefix) {
+async function discoverSimpleModules(standardsRoot, relativeRoot, prefix, group) {
   const rootPath = path.join(standardsRoot, relativeRoot);
   try {
     const entries = await fs.readdir(rootPath, { withFileTypes: true });
@@ -40,7 +40,7 @@ async function discoverGeneralModules(standardsRoot, relativeRoot, prefix) {
       modules.push({
         id: `${prefix}.${entry.name.toLowerCase()}`,
         label: attributes.title || titleize(entry.name),
-        group: 'general',
+        group,
         path: relativePath,
         language: '',
         requires: []
@@ -124,9 +124,9 @@ async function discoverLanguageModules(standardsRoot) {
 
 export async function loadCatalog(standardsRoot) {
   const modules = [
-    ...(await discoverGeneralModules(standardsRoot, 'mid/core', 'core')),
-    ...(await discoverGeneralModules(standardsRoot, 'mid/patterns', 'pattern')),
-    ...(await discoverGeneralModules(standardsRoot, 'mid/workflows', 'workflow')),
+    ...(await discoverSimpleModules(standardsRoot, 'mid/core', 'core', 'general')),
+    ...(await discoverSimpleModules(standardsRoot, 'mid/patterns', 'pattern', 'pattern')),
+    ...(await discoverSimpleModules(standardsRoot, 'mid/workflows', 'workflow', 'general')),
     ...(await discoverLanguageModules(standardsRoot))
   ];
 
@@ -134,7 +134,7 @@ export async function loadCatalog(standardsRoot) {
 }
 
 export function validateCatalog(modules) {
-  const validGroups = new Set(['general', 'language', 'framework']);
+  const validGroups = new Set(['general', 'pattern', 'language', 'framework']);
   const byId = new Map(modules.map((module) => [module.id, module]));
 
   for (const module of modules) {
@@ -194,6 +194,7 @@ export function resolveModuleIds(modules, config) {
 
   const requested = [
     ...config.general,
+    ...config.patterns,
     ...config.languages,
     ...config.frameworks
   ];

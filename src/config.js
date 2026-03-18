@@ -19,12 +19,20 @@ function normalizeModuleId(value) {
   return value;
 }
 
+function normalizeConfigSelections(config) {
+  const normalizedGeneral = config.general.map((value) => normalizeModuleId(value));
+  const migratedPatterns = normalizedGeneral.filter((value) => value.startsWith('pattern.'));
+  config.general = unique(normalizedGeneral.filter((value) => !value.startsWith('pattern.')));
+  config.patterns = unique([...(config.patterns ?? []), ...migratedPatterns]);
+}
+
 export function createDefaultConfig() {
   return {
     version: CONFIG_VERSION,
     standardsRevision: 'unknown',
     assistants: [],
     general: [],
+    patterns: [],
     languages: [],
     frameworks: [],
     outputs: { ...DEFAULT_OUTPUTS }
@@ -70,6 +78,9 @@ function parseConfig(raw, config, warning = null) {
       case 'general':
         config.general.push(normalizeModuleId(value));
         break;
+      case 'pattern':
+        config.patterns.push(value);
+        break;
       case 'language':
         config.languages.push(value);
         break;
@@ -94,7 +105,7 @@ function parseConfig(raw, config, warning = null) {
   }
 
   config.assistants = unique(config.assistants);
-  config.general = unique(config.general);
+  normalizeConfigSelections(config);
   config.languages = unique(config.languages);
   config.frameworks = unique(config.frameworks);
 
@@ -145,6 +156,9 @@ export async function saveConfig(projectRoot, config) {
   for (const value of config.general) {
     lines.push(`general=${value}`);
   }
+  for (const value of config.patterns) {
+    lines.push(`pattern=${value}`);
+  }
   for (const value of config.languages) {
     lines.push(`language=${value}`);
   }
@@ -169,6 +183,8 @@ export function validateConfigSelection(config, modules, strict = true) {
   const moduleById = new Map(modules.map((module) => [module.id, module]));
   const issues = [];
 
+  normalizeConfigSelections(config);
+
   const assistants = config.assistants.filter((assistant) => validAssistants.has(assistant));
   if (assistants.length !== config.assistants.length) {
     issues.push('config contains unknown assistants');
@@ -181,6 +197,7 @@ export function validateConfigSelection(config, modules, strict = true) {
 
   for (const [key, expectedGroup] of [
     ['general', 'general'],
+    ['patterns', 'pattern'],
     ['languages', 'language'],
     ['frameworks', 'framework']
   ]) {
@@ -191,6 +208,8 @@ export function validateConfigSelection(config, modules, strict = true) {
       config[key] = filtered;
     }
   }
+
+  normalizeConfigSelections(config);
 
   if (strict && issues.length > 0) {
     throw new Error(`Invalid entries in ${CONFIG_NAME}. Re-run mid to refresh the selections.`);
