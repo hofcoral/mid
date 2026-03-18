@@ -55,7 +55,7 @@ Common outputs:
 - `.mid/instructions/**`
 - `AGENTS.md`
 - `CLAUDE.md`
-- `.cursor/rules/mid-*.mdc`
+- `.cursor/rules/mid-router.mdc`
 
 Recommended gitignore:
 

@@ -12,13 +12,6 @@ export function unique(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
-export function slugify(value) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 export function yamlQuote(value) {
   return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

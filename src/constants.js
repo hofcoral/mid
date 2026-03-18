@@ -6,6 +6,7 @@ export const LEGACY_PROJECT_CONFIG_NAME = 'mid.config';
 export const CONFIG_VERSION = '1';
 export const MANAGED_TOKEN = 'mid:managed';
 export const CURSOR_PREFIX = 'mid-';
+export const CURSOR_ROUTER_NAME = 'mid-router.mdc';
 export const BACKUPS_DIR_NAME = 'backups';
 export const STATE_DIR_NAME = 'state';
 export const ADOPTED_BACKUPS_DIR_NAME = 'adopted';
@@ -18,12 +19,6 @@ export const ASSISTANTS = [
   { id: 'cursor', label: 'Cursor', defaultOutput: '.cursor/rules' },
   { id: 'general', label: 'General', defaultOutput: 'AGENTS.md' }
 ];
-
-export const GROUP_WEIGHTS = {
-  general: '20',
-  language: '30',
-  framework: '40'
-};
 
 export const DEFAULT_OUTPUTS = {
   codex: 'AGENTS.md',

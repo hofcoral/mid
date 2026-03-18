@@ -119,7 +119,7 @@ test('kill cleanup removes managed outputs', async () => {
   await removeManagedProjectOutputs(projectRoot, config);
 
   await assert.rejects(fs.access(path.join(projectRoot, 'AGENTS.md')));
-  await assert.rejects(fs.access(path.join(projectRoot, '.cursor', 'rules', 'mid-20-core-optional-git.mdc')));
+  await assert.rejects(fs.access(path.join(projectRoot, '.cursor', 'rules', 'mid-router.mdc')));
   await assert.rejects(fs.access(path.join(projectRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md')));
 });
 
@@ -141,8 +141,30 @@ test('kill backup preserves managed outputs and config under .mid/backups', asyn
 
   await fs.access(path.join(backupRoot, 'config'));
   await fs.access(path.join(backupRoot, 'AGENTS.md'));
-  await fs.access(path.join(backupRoot, '.cursor', 'rules', 'mid-20-core-git.mdc'));
+  await fs.access(path.join(backupRoot, '.cursor', 'rules', 'mid-router.mdc'));
   await fs.access(path.join(backupRoot, '.mid', 'instructions', 'core', 'git', 'instructions.md'));
+});
+
+test('cursor output is a single router rule that points to .mid instructions', async () => {
+  const modules = await loadCatalog(standardsRoot);
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-cursor-'));
+  const config = createDefaultConfig();
+  config.assistants = ['cursor'];
+  config.general = ['core.git'];
+  config.languages = ['language.typescript'];
+  config.frameworks = ['framework.typescript.nestjs'];
+  config.standardsRevision = 'abc123';
+
+  const resolved = resolveModuleIds(modules, config);
+  await generateOutputs(standardsRoot, projectRoot, config, resolved);
+
+  const output = await fs.readFile(path.join(projectRoot, '.cursor', 'rules', 'mid-router.mdc'), 'utf8');
+  assert.match(output, /alwaysApply: true/);
+  assert.match(output, /# Project Instructions/);
+  assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/core\/git\/instructions\.md/);
+  assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/languages\/typescript\/base\.instructions\.md/);
+  assert.match(output, /Path: \.\.\/\.\.\/\.mid\/instructions\/languages\/typescript\/frameworks\/nestjs\/instructions\.md/);
+  assert.doesNotMatch(output, /mid-20-/);
 });
 
 test('adopted unmanaged files are stored under .mid and restored on kill', async () => {

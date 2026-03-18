@@ -9,19 +9,20 @@ import {
   CONFIG_NAME,
   CONFIG_VERSION,
   CURSOR_PREFIX,
+  CURSOR_ROUTER_NAME,
   DEFAULT_OUTPUTS,
-  GROUP_WEIGHTS,
   INSTRUCTIONS_DIR_NAME,
   MANAGED_TOKEN,
   MID_DIR_NAME,
   STATE_DIR_NAME
 } from './constants.js';
 import { loadModuleMetadata } from './module-metadata.js';
-import { assistantLabel, relativeDisplayPath, resolveOutputPath, slugify, yamlQuote } from './utils.js';
+import { assistantLabel, relativeDisplayPath, resolveOutputPath, yamlQuote } from './utils.js';
 
 const ASSISTANT_NOTES = {
   codex: 'Treat this file as the entry point and only load referenced modules when the task clearly matches their triggers.',
   claude: 'Claude Code should prefer the module map below rather than pulling every instruction into context at once.',
+  cursor: 'Apply this rule as the entry point and load the referenced module snapshots only when the task matches their triggers.',
   general: 'Use this guide as the starting context for general-purpose assistance and load referenced modules on demand.'
 };
 
@@ -95,8 +96,12 @@ function assistantOutputPath(projectRoot, config, assistantId) {
   return resolveOutputPath(projectRoot, rawPath);
 }
 
-function cursorFilenameFor(module) {
-  return `${CURSOR_PREFIX}${GROUP_WEIGHTS[module.group] ?? '99'}-${slugify(module.id)}.mdc`;
+function cursorOutputDir(projectRoot, config) {
+  return assistantOutputPath(projectRoot, config, 'cursor');
+}
+
+function cursorRouterPath(projectRoot, config) {
+  return path.join(cursorOutputDir(projectRoot, config), CURSOR_ROUTER_NAME);
 }
 
 function timestampId() {
@@ -175,7 +180,7 @@ export async function validateTargetCollisions(projectRoot, config) {
   }
 
   if (config.assistants.includes('cursor')) {
-    const cursorDir = assistantOutputPath(projectRoot, config, 'cursor');
+    const cursorDir = cursorOutputDir(projectRoot, config);
     for (const assistant of ['codex', 'claude', 'general']) {
       if (!config.assistants.includes(assistant)) {
         continue;
@@ -190,15 +195,13 @@ export async function validateTargetCollisions(projectRoot, config) {
 export async function ensureSyncSafe(projectRoot, config, resolvedModules) {
   for (const assistant of config.assistants) {
     if (assistant === 'cursor') {
-      const cursorDir = assistantOutputPath(projectRoot, config, 'cursor');
+      const cursorDir = cursorOutputDir(projectRoot, config);
       if ((await fileExists(cursorDir)) && !(await isDirectory(cursorDir))) {
         throw new Error(`Cursor output path must be a directory: ${cursorDir}`);
       }
-      for (const module of resolvedModules) {
-        const targetPath = path.join(cursorDir, cursorFilenameFor(module));
-        if ((await fileExists(targetPath)) && !(await isManagedFile(targetPath))) {
-          throw new Error(`${targetPath} already exists and is not managed by mid.`);
-        }
+      const targetPath = cursorRouterPath(projectRoot, config);
+      if ((await fileExists(targetPath)) && !(await isManagedFile(targetPath))) {
+        throw new Error(`${targetPath} already exists and is not managed by mid.`);
       }
       continue;
     }
@@ -216,46 +219,38 @@ export async function ensureSyncSafe(projectRoot, config, resolvedModules) {
 export async function resolveInteractiveConflicts(projectRoot, config, resolvedModules) {
   for (const assistant of [...config.assistants]) {
     if (assistant === 'cursor') {
-      const cursorDir = assistantOutputPath(projectRoot, config, 'cursor');
+      const cursorDir = cursorOutputDir(projectRoot, config);
       if ((await fileExists(cursorDir)) && !(await isDirectory(cursorDir))) {
         throw new Error(`Cursor output path must be a directory: ${cursorDir}`);
       }
 
-      let skipAssistant = false;
-      for (const module of resolvedModules) {
-        const targetPath = path.join(cursorDir, cursorFilenameFor(module));
-        if (!(await fileExists(targetPath)) || (await isManagedFile(targetPath))) {
-          continue;
-        }
-
-        const response = await prompts({
-          type: 'select',
-          name: 'decision',
-          message: `${targetPath} already exists and is not managed by mid for ${assistantLabel(ASSISTANTS, assistant)}.`,
-          choices: [
-            { title: 'Backup and adopt', value: 'backup' },
-            { title: 'Skip this assistant', value: 'skip' },
-            { title: 'Abort', value: 'abort' }
-          ]
-        });
-
-        if (response.decision === 'abort' || !response.decision) {
-          throw new Error('Aborted.');
-        }
-
-        if (response.decision === 'skip') {
-          config.assistants = config.assistants.filter((value) => value !== assistant);
-          skipAssistant = true;
-          break;
-        }
-
-        const backupPath = await adoptExistingFile(projectRoot, targetPath);
-        console.log(`Backed up ${targetPath} to ${backupPath}`);
-      }
-
-      if (skipAssistant) {
+      const targetPath = cursorRouterPath(projectRoot, config);
+      if (!(await fileExists(targetPath)) || (await isManagedFile(targetPath))) {
         continue;
       }
+
+      const response = await prompts({
+        type: 'select',
+        name: 'decision',
+        message: `${targetPath} already exists and is not managed by mid for ${assistantLabel(ASSISTANTS, assistant)}.`,
+        choices: [
+          { title: 'Backup and adopt', value: 'backup' },
+          { title: 'Skip this assistant', value: 'skip' },
+          { title: 'Abort', value: 'abort' }
+        ]
+      });
+
+      if (response.decision === 'abort' || !response.decision) {
+        throw new Error('Aborted.');
+      }
+
+      if (response.decision === 'skip') {
+        config.assistants = config.assistants.filter((value) => value !== assistant);
+        continue;
+      }
+
+      const backupPath = await adoptExistingFile(projectRoot, targetPath);
+      console.log(`Backed up ${targetPath} to ${backupPath}`);
       continue;
     }
 
@@ -521,18 +516,10 @@ export async function cleanupMidDirectory(projectRoot) {
   await removeEmptyDirectory(midDir);
 }
 
-async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMetadata) {
-  const targetPath = assistantOutputPath(projectRoot, config, assistant);
-  await ensureParentDir(targetPath);
+function buildRouterParts(outputDir, assistant, modulesWithMetadata) {
   const alwaysApplyModules = modulesWithMetadata.filter((module) => module.meta.alwaysApply);
   const onDemandModules = modulesWithMetadata.filter((module) => !module.meta.alwaysApply);
-  const outputDir = path.dirname(targetPath);
-
   const parts = [
-    `<!-- ${MANAGED_TOKEN} assistant=${assistant} version=${CONFIG_VERSION} revision=${config.standardsRevision} -->`,
-    '',
-    `<!-- Generated by mid. Edit the source standards or ${CONFIG_NAME} instead. -->`,
-    '',
     '# Project Instructions',
     '',
     'Start with this file only. Do not load every referenced module by default.',
@@ -590,48 +577,62 @@ async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMe
     parts.push(`- ${assistantLabel(ASSISTANTS, assistant)}: ${assistantNote}`);
   }
 
+  return parts;
+}
+
+async function writeMarkdownOutput(projectRoot, config, assistant, modulesWithMetadata) {
+  const targetPath = assistantOutputPath(projectRoot, config, assistant);
+  await ensureParentDir(targetPath);
+  const outputDir = path.dirname(targetPath);
+  const parts = [
+    `<!-- ${MANAGED_TOKEN} assistant=${assistant} version=${CONFIG_VERSION} revision=${config.standardsRevision} -->`,
+    '',
+    `<!-- Generated by mid. Edit the source standards or ${CONFIG_NAME} instead. -->`,
+    '',
+    ...buildRouterParts(outputDir, assistant, modulesWithMetadata)
+  ];
+
   await fs.writeFile(targetPath, `${parts.join('\n')}\n`, 'utf8');
   console.log(`Wrote ${targetPath}`);
 }
 
 async function writeCursorOutputs(projectRoot, config, modulesWithMetadata) {
-  const cursorDir = assistantOutputPath(projectRoot, config, 'cursor');
+  const cursorDir = cursorOutputDir(projectRoot, config);
   if ((await fileExists(cursorDir)) && !(await isDirectory(cursorDir))) {
     throw new Error(`Cursor output path must be a directory: ${cursorDir}`);
   }
 
   await fs.mkdir(cursorDir, { recursive: true });
-  const plannedPaths = new Set(modulesWithMetadata.map((module) => path.join(cursorDir, cursorFilenameFor(module))));
+  const targetPath = cursorRouterPath(projectRoot, config);
+  const plannedPaths = new Set([targetPath]);
 
   const existingEntries = await fs.readdir(cursorDir).catch(() => []);
   for (const entry of existingEntries.filter((name) => name.startsWith(CURSOR_PREFIX) && name.endsWith('.mdc')).sort()) {
-    const targetPath = path.join(cursorDir, entry);
-    if (plannedPaths.has(targetPath)) {
+    const existingPath = path.join(cursorDir, entry);
+    if (plannedPaths.has(existingPath)) {
       continue;
     }
-    if (await removeIfManaged(targetPath)) {
-      console.log(`Removed stale Cursor rule: ${targetPath}`);
+    if (await removeIfManaged(existingPath)) {
+      console.log(`Removed stale Cursor rule: ${existingPath}`);
     }
   }
 
-  for (const module of modulesWithMetadata) {
-    const targetPath = path.join(cursorDir, cursorFilenameFor(module));
-    const contents = [
-      '---',
-      `description: ${yamlQuote(`Generated from ${module.meta.title}`)}`,
-      'alwaysApply: true',
-      '---',
-      '',
-      `<!-- ${MANAGED_TOKEN} assistant=cursor version=${CONFIG_VERSION} revision=${config.standardsRevision} -->`,
-      `<!-- mid:module id=${module.id} path=${module.path} -->`,
-      '',
-      module.body,
-      ''
-    ].join('\n');
+  const body = buildRouterParts(cursorDir, 'cursor', modulesWithMetadata).join('\n');
+  const contents = [
+    '---',
+    `description: ${yamlQuote('Generated Cursor router for mid')}`,
+    'alwaysApply: true',
+    '---',
+    '',
+    `<!-- ${MANAGED_TOKEN} assistant=cursor version=${CONFIG_VERSION} revision=${config.standardsRevision} -->`,
+    `<!-- Generated by mid. Edit the source standards or ${CONFIG_NAME} instead. -->`,
+    '',
+    body,
+    ''
+  ].join('\n');
 
-    await fs.writeFile(targetPath, contents, 'utf8');
-    console.log(`Wrote ${targetPath}`);
-  }
+  await fs.writeFile(targetPath, contents, 'utf8');
+  console.log(`Wrote ${targetPath}`);
 }
 
 export async function generateOutputs(standardsRoot, projectRoot, config, resolvedModules) {
