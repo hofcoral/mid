@@ -4,15 +4,7 @@ import { collectModules } from './catalog.js';
 
 const require = createRequire(import.meta.url);
 const { MultiselectPrompt } = require('prompts/lib/elements');
-
-const MULTISELECT_INSTRUCTIONS = [
-  '',
-  'Instructions:',
-  '    ↑/↓: Highlight option',
-  '    [space]: Toggle selection',
-  '    ←: Go back',
-  '    →/enter: Continue'
-].join('\n');
+const { erase } = require('sisteransi');
 
 function moduleChoices(modules) {
   return modules.map((module) => ({
@@ -23,6 +15,33 @@ function moduleChoices(modules) {
 
 function selectedValues(items) {
   return items.filter((item) => item.selected).map((item) => item.value);
+}
+
+function selectedTitles(choices, selected) {
+  const selectedSet = new Set(selected);
+  return choices
+    .filter((choice) => selectedSet.has(choice.value))
+    .map((choice) => choice.title);
+}
+
+function renderBreadcrumbs(steps, config, activeStepIndex, previousLineCount) {
+  if (process.stdout.isTTY) {
+    process.stdout.write(erase.lines(previousLineCount + 1));
+  }
+
+  let lineCount = 0;
+
+  for (let index = 0; index < activeStepIndex; index += 1) {
+    const step = steps[index];
+    const choices = step.getChoices();
+    const selected = config[step.key] ?? [];
+    const titles = selectedTitles(choices, selected);
+    const suffix = titles.length > 0 ? ` › ${titles.join(', ')}` : '';
+    process.stdout.write(`✔ ${step.message}${suffix}\n`);
+    lineCount += 1;
+  }
+
+  return lineCount;
 }
 
 async function runMultiselectStep({ message, choices, selected, min = 0, allowBack = true }) {
@@ -38,26 +57,46 @@ async function runMultiselectStep({ message, choices, selected, min = 0, allowBa
         selected: selected.includes(choice.value)
       })),
       min: min || undefined,
-      instructions: MULTISELECT_INSTRUCTIONS,
+      instructions: false,
       hint: ''
     });
-
-    const originalSubmit = prompt.submit.bind(prompt);
     const toValue = (items) => selectedValues(items);
 
-    prompt.left = () => {
-      if (!allowBack) {
-        prompt.bell();
+    function finish(action) {
+      if (prompt.closed) {
         return;
       }
-      prompt.exited = true;
-      prompt.out.write('\n');
+
+      if (action === 'back') {
+        if (!allowBack) {
+          prompt.bell();
+          return;
+        }
+        prompt.exited = true;
+        prompt.aborted = false;
+      } else {
+        const selected = prompt.value.filter((item) => item.selected);
+        if (prompt.minSelected && selected.length < prompt.minSelected) {
+          prompt.showMinError = true;
+          prompt.render();
+          return;
+        }
+        prompt.done = true;
+        prompt.aborted = false;
+        prompt.exited = false;
+      }
+
+      prompt.out.write(prompt.clear);
       prompt.close();
-    };
+    }
+
+    prompt.left = () => finish('back');
 
     prompt.right = () => {
-      originalSubmit();
+      finish('next');
     };
+
+    prompt.submit = () => finish('next');
 
     prompt.on('submit', (items) => resolve({ action: 'next', value: toValue(items) }));
     prompt.on('exit', (items) => resolve({ action: 'back', value: toValue(items) }));
@@ -114,8 +153,10 @@ export async function interactiveConfig(modules, config) {
   }
 
   let stepIndex = findNavigableStepIndex(0, 1);
+  let breadcrumbLineCount = 0;
   while (stepIndex < steps.length) {
     const step = steps[stepIndex];
+    breadcrumbLineCount = renderBreadcrumbs(steps, config, stepIndex, breadcrumbLineCount);
     const choices = step.getChoices();
     const selected = step.getSelected ? step.getSelected(choices) : (config[step.key] ?? []);
     const result = await runMultiselectStep({
