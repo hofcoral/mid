@@ -73,7 +73,8 @@ Commit `.mid/config` and the generated assistant files you want to keep in the p
 
 It stores:
 - selected assistants
-- selected general modules
+- selected shared modules
+- selected design patterns
 - selected languages
 - selected frameworks
 - optional output path overrides
@@ -81,7 +82,7 @@ It stores:
 
 `mid sync` overwrites managed outputs from that config. If an unmanaged file already exists at a target path, `mid` will not replace it silently.
 
-Generated root instruction files are entrypoints only. They point to copied module snapshots under `.mid/instructions/` using relative paths so deeper instructions can be loaded on demand instead of bloating initial context.
+Generated root instruction files are entrypoints only. They point to copied module snapshots under `.mid/instructions/` using relative paths so deeper instructions can be loaded on demand instead of bloating initial context. Selected design patterns are bundled into `.mid/instructions/design-patterns.md`.
 
 ## Content Layout
 
