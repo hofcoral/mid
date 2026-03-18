@@ -1,0 +1,11 @@
+{
+  "title": "Lint",
+  "summary": "Run lint and formatting checks before finishing a change.",
+  "alwaysApply": false,
+  "triggers": [
+    "lint",
+    "formatting",
+    "style fixes",
+    "pre-finish checks"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Husky",
+  "summary": "Respect Husky and pre-commit hooks as required quality gates.",
+  "alwaysApply": false,
+  "triggers": [
+    "pre-commit hooks",
+    "husky",
+    "commit checks",
+    "quality gates"
+  ]
+}
