@@ -5,6 +5,7 @@ import { collectModules } from './catalog.js';
 const require = createRequire(import.meta.url);
 const { MultiselectPrompt } = require('prompts/lib/elements');
 const { erase } = require('sisteransi');
+const ALL_VALUE = '__mid_all__';
 
 function moduleChoices(modules) {
   return modules.map((module) => ({
@@ -22,6 +23,35 @@ function selectedTitles(choices, selected) {
   return choices
     .filter((choice) => selectedSet.has(choice.value))
     .map((choice) => choice.title);
+}
+
+function withAllChoice(choices, enabled) {
+  if (!enabled || choices.length === 0) {
+    return choices;
+  }
+
+  return [
+    { title: 'All', value: ALL_VALUE },
+    ...choices
+  ];
+}
+
+function isAllValue(value) {
+  return value === ALL_VALUE;
+}
+
+function realPromptItems(items) {
+  return items.filter((item) => !isAllValue(item.value));
+}
+
+function syncAllChoice(items) {
+  const allItem = items.find((item) => isAllValue(item.value));
+  if (!allItem) {
+    return;
+  }
+
+  const realItems = realPromptItems(items).filter((item) => !item.disabled);
+  allItem.selected = realItems.length > 0 && realItems.every((item) => item.selected);
 }
 
 function renderBreadcrumbs(steps, config, activeStepIndex, previousLineCount) {
@@ -44,23 +74,62 @@ function renderBreadcrumbs(steps, config, activeStepIndex, previousLineCount) {
   return lineCount;
 }
 
-async function runMultiselectStep({ message, choices, selected, min = 0, allowBack = true }) {
+async function runMultiselectStep({ message, choices, selected, min = 0, allowBack = true, allowAll = false }) {
   if (choices.length === 0) {
     return { action: 'next', value: [] };
   }
 
   return new Promise((resolve, reject) => {
+    const promptChoices = withAllChoice(choices, allowAll);
+    const selectedSet = new Set(selected);
+    const initialAllSelected = allowAll && choices.every((choice) => selectedSet.has(choice.value));
     const prompt = new MultiselectPrompt({
       message,
-      choices: choices.map((choice) => ({
+      choices: promptChoices.map((choice) => ({
         ...choice,
-        selected: selected.includes(choice.value)
+        selected: isAllValue(choice.value) ? initialAllSelected : selectedSet.has(choice.value)
       })),
       min: min || undefined,
       instructions: false,
       hint: ''
     });
-    const toValue = (items) => selectedValues(items);
+    const toValue = (items) => selectedValues(realPromptItems(items));
+
+    function toggleAllSelection() {
+      const allItem = prompt.value.find((item) => isAllValue(item.value));
+      const nextSelected = !(allItem?.selected);
+      for (const item of realPromptItems(prompt.value)) {
+        if (!item.disabled) {
+          item.selected = nextSelected;
+        }
+      }
+      syncAllChoice(prompt.value);
+      prompt.render();
+    }
+
+    function toggleCurrentSelection() {
+      const current = prompt.value[prompt.cursor];
+      if (!current) {
+        return;
+      }
+
+      if (isAllValue(current.value)) {
+        toggleAllSelection();
+        return;
+      }
+
+      if (current.selected) {
+        current.selected = false;
+      } else if (current.disabled || prompt.value.filter((item) => item.selected && !isAllValue(item.value)).length >= prompt.maxChoices) {
+        prompt.bell();
+        return;
+      } else {
+        current.selected = true;
+      }
+
+      syncAllChoice(prompt.value);
+      prompt.render();
+    }
 
     function finish(action) {
       if (prompt.closed) {
@@ -90,6 +159,8 @@ async function runMultiselectStep({ message, choices, selected, min = 0, allowBa
       prompt.close();
     }
 
+    prompt.handleSpaceToggle = toggleCurrentSelection;
+    prompt.toggleAll = toggleAllSelection;
     prompt.left = () => finish('back');
 
     prompt.right = () => {
@@ -115,17 +186,20 @@ export async function interactiveConfig(modules, config) {
       key: 'frameworks',
       message: 'Select frameworks',
       getChoices: () => moduleChoices(collectModules(modules, 'framework', config.languages)),
-      getSelected: (choices) => config.frameworks.filter((id) => choices.some((choice) => choice.value === id))
+      getSelected: (choices) => config.frameworks.filter((id) => choices.some((choice) => choice.value === id)),
+      allowAll: true
     },
     {
       key: 'patterns',
       message: 'Select design patterns',
-      getChoices: () => moduleChoices(collectModules(modules, 'pattern'))
+      getChoices: () => moduleChoices(collectModules(modules, 'pattern')),
+      allowAll: true
     },
     {
       key: 'general',
       message: 'Select general modules',
-      getChoices: () => moduleChoices(collectModules(modules, 'general'))
+      getChoices: () => moduleChoices(collectModules(modules, 'general')),
+      allowAll: true
     },
     {
       key: 'domains',
@@ -169,7 +243,8 @@ export async function interactiveConfig(modules, config) {
       choices,
       selected,
       min: step.min,
-      allowBack: stepIndex > 0
+      allowBack: stepIndex > 0,
+      allowAll: !!step.allowAll
     });
 
     config[step.key] = result.value ?? [];
