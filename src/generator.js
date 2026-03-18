@@ -19,6 +19,8 @@ import {
 import { loadModuleMetadata } from './module-metadata.js';
 import { assistantLabel, relativeDisplayPath, resolveOutputPath, yamlQuote } from './utils.js';
 
+const GITIGNORE_ENTRIES = ['.mid/backups/', '.mid/adopted/', '.mid/state/'];
+
 const ASSISTANT_NOTES = {
   codex: 'Treat this file as the entry point and only load referenced modules when the task clearly matches their triggers.',
   claude: 'Claude Code should prefer the module map below rather than pulling every instruction into context at once.',
@@ -102,6 +104,30 @@ async function removeIfManaged(targetPath) {
     return true;
   }
   return false;
+}
+
+async function ensureGitignore(projectRoot) {
+  const gitignorePath = path.join(projectRoot, '.gitignore');
+  let content = '';
+
+  try {
+    content = await fs.readFile(gitignorePath, 'utf8');
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  const existing = new Set(content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+  const linesToAdd = GITIGNORE_ENTRIES.filter((entry) => !existing.has(entry));
+  if (linesToAdd.length === 0) {
+    return;
+  }
+
+  const appended = content.endsWith('\n') || content === '' ? content : `${content}\n`;
+  const updated = `${appended}${linesToAdd.join('\n')}\n`;
+  await fs.writeFile(gitignorePath, updated, 'utf8');
+  console.log(`Updated ${gitignorePath}`);
 }
 
 function assistantOutputPath(projectRoot, config, assistantId) {
@@ -694,6 +720,7 @@ async function writeCursorOutputs(projectRoot, config, modulesWithMetadata, patt
 
 export async function generateOutputs(standardsRoot, projectRoot, config, resolvedModules) {
   await cleanupDeselectOutputs(projectRoot, config);
+  await ensureGitignore(projectRoot);
   const modulesWithMetadata = await Promise.all(
     resolvedModules.map((module) => loadModuleMetadata(standardsRoot, module))
   );
