@@ -34,6 +34,7 @@ mid
 ```
 
 This opens an interactive selector, saves `.mid/config`, and generates the selected assistant files.
+When `.mid/config` is missing or effectively empty, `mid` also scans the repo and pre-fills a conservative recommended selection before you confirm it.
 
 ### Commands
 
@@ -45,6 +46,16 @@ This opens an interactive selector, saves `.mid/config`, and generates the selec
 | `mid kill` | Ask for confirmation, then remove managed outputs, restore adopted originals, and delete `.mid/config`. |
 | `mid kill --backup` | Ask for confirmation, then move managed outputs into `.mid/backups/<timestamp>/` before cleanup. |
 | `mid kill --yes` | Skip the confirmation prompt. Useful for non-interactive runs. |
+
+## Releases
+
+CI validates every push to `main` and every pull request.
+
+Publishing is manual through the GitHub Actions `Publish` workflow:
+- set `version` for an exact release such as `0.2.0`
+- or leave `version` empty and choose `patch`, `minor`, or `major` via `release_type`
+
+The workflow bumps `package.json` and `package-lock.json`, creates the release commit and tag, publishes to npm, and pushes the result back to `main`.
 
 ## Generated Files
 

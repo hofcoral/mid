@@ -25,6 +25,7 @@
     "src/generator.js",
     "src/interactive.js",
     "src/module-metadata.js",
+    "src/recommend.js",
     "src/utils.js",
     "src/validate-content.js",
     "README.md",

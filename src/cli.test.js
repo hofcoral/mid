@@ -17,6 +17,7 @@ import {
   removeManagedProjectOutputsWithOptions,
   restoreAdoptedProjectFiles
 } from './generator.js';
+import { applyRecommendation, formatRecommendationSummary, hasMeaningfulSelection, recommendSelection } from './recommend.js';
 
 const standardsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const execFileAsync = promisify(execFile);
@@ -123,6 +124,102 @@ test('config validation removes invalid entries in warn mode', async () => {
   assert.deepEqual(config.general, ['core.git']);
   assert.deepEqual(config.domains, ['domain.backend']);
   assert.deepEqual(config.patterns, ['pattern.strategy']);
+});
+
+test('repo recommendation detects a Next.js frontend repo conservatively', async () => {
+  const modules = await loadCatalog(standardsRoot);
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-recommend-next-'));
+
+  await fs.writeFile(path.join(projectRoot, 'package.json'), JSON.stringify({
+    dependencies: {
+      next: '^15.0.0',
+      react: '^19.0.0',
+      typescript: '^5.0.0',
+      husky: '^9.0.0',
+      eslint: '^9.0.0'
+    }
+  }, null, 2));
+  await fs.writeFile(path.join(projectRoot, 'tsconfig.json'), '{}\n');
+  await fs.mkdir(path.join(projectRoot, '.git'));
+  await fs.mkdir(path.join(projectRoot, '.husky'));
+  await fs.writeFile(path.join(projectRoot, '.husky', 'pre-commit'), 'npm test\n');
+  await fs.mkdir(path.join(projectRoot, 'app'));
+  await fs.writeFile(path.join(projectRoot, 'app', 'page.tsx'), 'export default function Page() { return null; }\n');
+
+  const recommendation = await recommendSelection(projectRoot, modules);
+
+  assert.deepEqual(recommendation.languages, ['language.typescript']);
+  assert.deepEqual(recommendation.frameworks, ['framework.typescript.nextjs']);
+  assert.deepEqual(recommendation.domains, ['domain.frontend']);
+  assert.deepEqual(recommendation.general, ['core.git', 'core.husky', 'core.lint']);
+  assert.deepEqual(recommendation.patterns, []);
+});
+
+test('repo recommendation detects a NestJS backend repo conservatively', async () => {
+  const modules = await loadCatalog(standardsRoot);
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mid-recommend-nest-'));
+
+  await fs.writeFile(path.join(projectRoot, 'package.json'), JSON.stringify({
+    dependencies: {
+      '@nestjs/common': '^11.0.0',
+      '@nestjs/core': '^11.0.0',
+      typescript: '^5.0.0'
+    }
+  }, null, 2));
+  await fs.writeFile(path.join(projectRoot, 'tsconfig.json'), '{}\n');
+  await fs.mkdir(path.join(projectRoot, '.git'));
+  await fs.mkdir(path.join(projectRoot, 'src'));
+  await fs.mkdir(path.join(projectRoot, 'src', 'api'));
+  await fs.writeFile(path.join(projectRoot, 'src', 'api', 'health.controller.ts'), 'export class HealthController {}\n');
+
+  const recommendation = await recommendSelection(projectRoot, modules);
+
+  assert.deepEqual(recommendation.languages, ['language.typescript']);
+  assert.deepEqual(recommendation.frameworks, ['framework.typescript.nestjs']);
+  assert.deepEqual(recommendation.domains, ['domain.backend']);
+  assert.deepEqual(recommendation.general, ['core.git']);
+});
+
+test('recommendation is only applied to an effectively empty config', async () => {
+  const config = createDefaultConfig();
+  const recommendation = {
+    assistants: [],
+    general: ['core.git'],
+    domains: ['domain.frontend'],
+    patterns: [],
+    languages: ['language.typescript'],
+    frameworks: ['framework.typescript.react']
+  };
+
+  assert.equal(hasMeaningfulSelection(config), false);
+  applyRecommendation(config, recommendation);
+  assert.deepEqual(config.general, ['core.git']);
+  assert.deepEqual(config.domains, ['domain.frontend']);
+  assert.deepEqual(config.languages, ['language.typescript']);
+  assert.deepEqual(config.frameworks, ['framework.typescript.react']);
+
+  config.general = ['core.lint'];
+  assert.equal(hasMeaningfulSelection(config), true);
+  applyRecommendation(config, {
+    ...recommendation,
+    general: ['core.git', 'core.husky']
+  });
+  assert.deepEqual(config.general, ['core.lint']);
+});
+
+test('recommendation summary formats human-readable reasons', async () => {
+  const modules = await loadCatalog(standardsRoot);
+  const lines = formatRecommendationSummary({
+    reasons: [
+      { id: 'language.typescript', reasons: ['Found tsconfig.json.'] },
+      { id: 'framework.typescript.nextjs', reasons: ['Found `next` in package.json.'] }
+    ]
+  }, modules);
+
+  assert.deepEqual(lines, [
+    '- TypeScript: Found tsconfig.json.',
+    '- Next.js: Found `next` in package.json.'
+  ]);
 });
 
 test('markdown outputs are router-style and bundle selected patterns into one file', async () => {

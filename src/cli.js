@@ -18,6 +18,12 @@ import {
   validateTargetCollisions
 } from './generator.js';
 import { interactiveConfig } from './interactive.js';
+import {
+  applyRecommendation,
+  formatRecommendationSummary,
+  hasMeaningfulSelection,
+  recommendSelection
+} from './recommend.js';
 import { getGitRevision, joinIds } from './utils.js';
 
 function resolveStandardsRoot() {
@@ -44,6 +50,18 @@ async function loadState(projectRoot) {
 async function interactiveRun(standardsRoot, projectRoot, modules) {
   const config = await loadState(projectRoot);
   validateConfigSelection(config, modules, false);
+  if (!hasMeaningfulSelection(config)) {
+    const recommendation = await recommendSelection(projectRoot, modules);
+    applyRecommendation(config, recommendation);
+    const recommendationLines = formatRecommendationSummary(recommendation, modules);
+    if (recommendationLines.length > 0) {
+      console.log('Recommended selections based on this repo:');
+      for (const line of recommendationLines) {
+        console.log(line);
+      }
+      console.log('');
+    }
+  }
   await interactiveConfig(modules, config);
   await validateTargetCollisions(projectRoot, config);
   const resolvedModules = resolveModuleIds(modules, config);
