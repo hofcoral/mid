@@ -126,8 +126,4 @@ Module format:
 
 ## Contributing
 
-Any contribution to this project is highly appreciated!
-
-If you have very opinionated programming style, please contribute and improve these.
-
-Reach out to me on [X](https://x.com/hof_coral)
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, content conventions, testing expectations, and PR guidance.
