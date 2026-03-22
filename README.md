@@ -1,6 +1,12 @@
 # mid
 
-`mid` generates project-specific AI instruction files from reusable markdown standards.
+AI-generated code sucks, so I created `mid` (Mark. It. Down).
+
+We all want to be 10x devs but AI on it's own is too sloppy. Nobody wants to spend time reviewing low-quality code and refactoring it.
+
+`mid` generates AI **standards** not just instructions. `mid` does this effeciently by instructing your agent to only load modular standards on demand.
+
+Have fun writing sexy-looking code
 
 ## Install
 
@@ -52,6 +58,7 @@ When `.mid/config` is missing or effectively empty, `mid` also scans the repo an
 CI validates every push to `main` and every pull request.
 
 Publishing is manual through the GitHub Actions `Publish` workflow:
+
 - set `version` for an exact release such as `0.2.0`
 - or leave `version` empty and choose `patch`, `minor`, or `major` via `release_type`
 
@@ -62,6 +69,7 @@ The workflow bumps `package.json` and `package-lock.json`, creates the release c
 `mid` writes assistant-native files and stores its own state under `.mid/`.
 
 Common outputs:
+
 - `.mid/config`
 - `.mid/instructions/**`
 - `AGENTS.md`
@@ -83,6 +91,7 @@ Commit `.mid/config` and the generated assistant files you want to keep in the p
 `.mid/config` is the project source of truth.
 
 It stores:
+
 - selected assistants
 - selected general modules
 - selected domains
@@ -101,6 +110,7 @@ Generated root instruction files are entrypoints only. They point to copied modu
 All reusable instruction content lives under `mid/`.
 
 Structure:
+
 - `mid/core/*`: shared core modules
 - `mid/domains/*`: cross-cutting domain modules
 - `mid/languages/*`: language and framework modules
@@ -108,7 +118,16 @@ Structure:
 - `mid/workflows/*`: workflow modules
 
 Module format:
+
 - core/domain/framework/pattern/workflow modules use a folder with `instructions.md` and `metadata.json`
 - language base modules use `base.instructions.md` and `base.metadata.json`
 
 `mid` discovers modules directly from the filesystem. Metadata may include `tags` and `autoSelectWhenTags` so cross-cutting domain modules can be auto-selected without duplicating tag matches.
+
+## Contributing
+
+Any contribution to this project is highly appreciated!
+
+If you have very opinionated programming style, please contribute and improve these.
+
+Reach out to me on [X](https://x.com/hof_coral)
